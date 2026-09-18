@@ -98,6 +98,32 @@ export function CreatorProfileScreen() {
           <p className="mt-2 text-sm text-muted">No account set up yet.</p>
         )}
 
+        {/*
+          The active hold, said HERE and not only on the payouts screen.
+
+          This is the page where somebody would change the account again, and
+          changing twice inside a hold window is exactly the pattern an attacker
+          produces. A creator who did not start the first change needs to see it
+          at the moment they are looking at their bank details.
+        */}
+        {destination.data?.holdUntil &&
+          new Date(destination.data.holdUntil) > new Date() && (
+            <div className="mt-2 rounded-lg border border-hair bg-canvas p-3">
+              <p className="text-sm text-ink">
+                Payouts are paused until{' '}
+                {new Date(destination.data.holdUntil).toLocaleDateString('en-US', {
+                  day: 'numeric',
+                  month: 'short',
+                })}{' '}
+                because these details changed recently.
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                <strong>If that was not you</strong>, do not change them again — use the stop link
+                in the email we sent to your previous address, and it undoes the change.
+              </p>
+            </div>
+          )}
+
         {destination.data && destination.data.pendingRequirements.length > 0 && (
           <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-amber-900">
             {destination.data.pendingRequirements.map((requirement) => (

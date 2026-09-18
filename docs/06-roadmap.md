@@ -270,8 +270,14 @@ handlers from the generated client.
       figures, brand drill-down, the treasury command inbox, webhook deliveries, and the hash-chained
       audit log with per-row chain validity
 - [x] `<StatusPill>` — one status vocabulary, where `secured` green means settled and nothing else
-- [x] **Every screen has been opened in a browser and looked at.** 24 routes swept for render errors,
-      empty renders and `undefined`/`NaN` leaking into text; each defect below was found that way
+- [x] **Every one of the 24 routes has been opened in a browser and looked at individually**, in
+      both the default and empty scenarios, plus `ledger-drift` on the admin surfaces. The sweep
+      (render errors, empty renders, `undefined`/`NaN` in text) is the floor, not the review
+- [x] **The fixtures reconcile.** Campaign committed equals the sum of its offered and accepted
+      deals; envelope committed equals its campaigns' allocations; the org's daily released never
+      exceeds the total ever released; the admin brand figures equal the brand-side ones. A fixture
+      set whose numbers do not add up makes every layout bug look like a data bug and hides the
+      reverse — and nobody can check the screen by eye
 - [ ] Origin isolation for `/admin` — it now has its own chrome and nav, but still shares an origin.
       That is a deployment change, not a code one
 - [ ] `<Countdown>` extraction, org switcher, public `/@handle` pages

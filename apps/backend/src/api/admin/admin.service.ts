@@ -281,9 +281,17 @@ export class AdminService {
       (row) => (!row.payoutsEnabled || row.payoutHoldUntil !== null) && row.releasedMinor > 0n,
     ).length;
 
-    const creators = filters.blockedOnly
-      ? rows.filter((row) => !row.payoutsEnabled || row.payoutHoldUntil !== null)
-      : rows;
+    const creators = (
+      filters.blockedOnly
+        ? rows.filter((row) => !row.payoutsEnabled || row.payoutHoldUntil !== null)
+        : rows
+    ).sort((a, b) => {
+      // Blocked first, because the screen says so and because they are the only
+      // rows anybody acts on. Within each group, most money owed first.
+      const blocked = (row: typeof a) =>
+        !row.payoutsEnabled || row.payoutHoldUntil !== null ? 0 : 1;
+      return blocked(a) - blocked(b) || (b.releasedMinor > a.releasedMinor ? 1 : -1);
+    });
 
     return { creators, blockedCount };
   }

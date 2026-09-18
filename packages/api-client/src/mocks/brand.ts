@@ -36,7 +36,9 @@ const ORGANIZATION = {
   // $10,000/day, the ceiling that applies when no genuine second approver
   // exists. A phished founder loses at most this before anything else catches it.
   dailyReleaseCeiling: usd('1000000'),
-  dailyReleased: usd('242500'),
+  // Today's release: @priyacuts' halfway milestone. It must never exceed the
+  // total ever released, which the deal fixtures put at 2,175.00.
+  dailyReleased: usd('62500'),
   bankAccountLast4: '6789',
   bankAccountStatus: 'verified' as const,
 };
@@ -79,9 +81,11 @@ const WORKSPACES = [
     campaignCount: 2,
     memberCount: 3,
     envelope: {
-      ceiling: usd('15000000'),
-      committed: usd('11725050'),
-      remaining: usd('3274950'),
+      // Committed equals what this workspace's campaigns hold:
+      // 7,500.00 (Skincare) + 4,225.50 (Haircare).
+      ceiling: usd('1500000'),
+      committed: usd('1172550'),
+      remaining: usd('327450'),
       expiresAt: '2026-12-31T23:59:59.000Z',
       approvedByEmail: 'finance@lumenskin.com',
       approvedAt: '2026-08-01T11:00:00.000Z',
@@ -97,8 +101,9 @@ const WORKSPACES = [
     campaignCount: 1,
     memberCount: 2,
     envelope: {
-      ceiling: usd('2000000'),
-      committed: usd('2000000'),
+      // Fully committed: the UK campaign below holds exactly the ceiling.
+      ceiling: usd('200000'),
+      committed: usd('200000'),
       remaining: usd('0'),
       expiresAt: '2026-10-31T23:59:59.000Z',
       approvedByEmail: 'finance@lumenskin.com',
@@ -147,24 +152,36 @@ const WORKSPACE_MEMBERS = [
 // Campaigns
 // ---------------------------------------------------------------------------
 
+/*
+ * Campaign figures, reconciled against the deals below.
+ *
+ * Every number here is derivable from DEAL_SUMMARIES: `committed` is the total
+ * of deals in offered/accepted/active, `released` is the total actually
+ * released, and the deliverable counts are the sums. That is not tidiness — a
+ * fixture set whose numbers do not add up makes every layout bug look like a
+ * data bug and hides the reverse, and it means nobody can check the screen by
+ * eye.
+ */
 const CAMPAIGNS_DETAIL = [
   {
     campaignId: CAMPAIGN_ID,
     workspaceId: WORKSPACE_ID,
     workspaceName: 'Core skincare',
     name: 'Skincare — Q4 launch',
-    brief: 'Barrier repair range. 20 creators, 20 videos each, vertical, 30–60s.',
+    brief: 'Barrier repair range. Vertical, 30–60s.',
     state: 'live' as const,
     startsAt: '2026-09-01T00:00:00.000Z',
     endsAt: '2026-12-15T00:00:00.000Z',
     createdAt: '2026-08-18T10:00:00.000Z',
-    allocated: usd('7500000'),
-    committed: usd('6480000'),
-    released: usd('4182050'),
-    uncommitted: usd('1020000'),
-    dealCount: 18,
-    deliverablesTotal: 240,
-    deliverablesApproved: 137,
+    allocated: usd('750000'),
+    // @mayaonmain 2,400 (active) + @thekwongs 1,800 (offered). The draft
+    // promises nobody anything and is not committed.
+    committed: usd('420000'),
+    released: usd('60000'),
+    uncommitted: usd('330000'),
+    dealCount: 3,
+    deliverablesTotal: 50,
+    deliverablesApproved: 7,
   },
   {
     campaignId: CAMPAIGN_ID_2,
@@ -176,13 +193,15 @@ const CAMPAIGNS_DETAIL = [
     startsAt: '2026-07-01T00:00:00.000Z',
     endsAt: null,
     createdAt: '2026-06-28T09:00:00.000Z',
-    allocated: usd('4225050'),
-    committed: usd('4100000'),
-    released: usd('3100000'),
-    uncommitted: usd('125050'),
-    dealCount: 9,
-    deliverablesTotal: 120,
-    deliverablesApproved: 96,
+    allocated: usd('422550'),
+    // Only @priyacuts is live. The completed deal is paid and the terminated one
+    // returned its remainder.
+    committed: usd('125000'),
+    released: usd('157500'),
+    uncommitted: usd('297550'),
+    dealCount: 3,
+    deliverablesTotal: 26,
+    deliverablesApproved: 20,
   },
   {
     campaignId: CAMPAIGN_ID_3,
@@ -194,12 +213,16 @@ const CAMPAIGNS_DETAIL = [
     startsAt: null,
     endsAt: null,
     createdAt: '2026-09-10T12:00:00.000Z',
-    allocated: usd('0'),
+    // Allocated but not yet spent — which is what exhausts the workspace's
+    // ceiling while no deal has been offered from it.
+    allocated: usd('200000'),
     committed: usd('0'),
     released: usd('0'),
-    uncommitted: usd('0'),
+    uncommitted: usd('200000'),
     dealCount: 0,
-    deliverablesTotal: 40,
+    // A draft campaign has no deliverables yet. It had 40 before, with no deals
+    // to own them.
+    deliverablesTotal: 0,
     deliverablesApproved: 0,
   },
 ];
@@ -391,6 +414,7 @@ const ROSTER = [
     creatorId: CREATOR_ID,
     handle: '@mayaonmain',
     displayName: 'Maya Oyelaran',
+    bio: 'Skincare and everyday routines. Lagos → London.',
     payoutsEnabled: true,
     payoutHoldUntil: null,
     dealCount: 2,
@@ -406,6 +430,7 @@ const ROSTER = [
     creatorId: CREATOR_ID_2,
     handle: '@priyacuts',
     displayName: 'Priya Raghunathan',
+    bio: 'Curly hair, honest reviews, no filters.',
     payoutsEnabled: true,
     // On a 72-hour hold after changing their payout destination. The brand sees
     // WHY their creator has not been paid, rather than assuming Rayi is broken.
@@ -423,6 +448,7 @@ const ROSTER = [
     creatorId: CREATOR_ID_3,
     handle: '@thekwongs',
     displayName: null,
+    bio: null,
     // Cannot be paid at all. Work can still be accepted and done; the money
     // waits rather than failing, and this is what tells a brand why.
     payoutsEnabled: false,
@@ -440,6 +466,7 @@ const ROSTER = [
     creatorId: CREATOR_ID_4,
     handle: '@devonmakes',
     displayName: 'Devon Achebe',
+    bio: 'Grooming and barbering. Chicago.',
     payoutsEnabled: true,
     payoutHoldUntil: null,
     dealCount: 1,
@@ -857,7 +884,9 @@ export const brandHandlers = [
       ROSTER.find((row) => row.creatorId === String(params['creatorId'])) ?? ROSTER[0]!;
     return HttpResponse.json({
       ...creator,
-      bio: 'Skincare and everyday routines. Lagos → London.',
+      // Their own bio. A hardcoded one here showed @mayaonmain's text on every
+      // creator, which looks exactly like a data-leak bug.
+      bio: creator.bio,
       deals: DEAL_SUMMARIES.filter((deal) => deal.creatorId === creator.creatorId).map((deal) => ({
         dealId: deal.dealId,
         campaignName: deal.campaignName,

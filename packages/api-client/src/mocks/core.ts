@@ -50,7 +50,8 @@ const FUNDS = {
   available: usd('41250000'),
   clearing: usd('5000000'),
   pending: usd('980000'),
-  allocated: usd('13725050'),
+  // 7,500.00 + 4,225.50 + 2,000.00 — the three campaigns below.
+  allocated: usd('1372550'),
   lots: [
     {
       depositId: '33333333-3333-4333-8333-333333333331',
@@ -94,6 +95,7 @@ const EMPTY_FUNDS = {
   lots: [],
 };
 
+/** Reconciled with the deal fixtures. See the note in mocks/brand.ts. */
 const CAMPAIGNS = {
   campaigns: [
     {
@@ -101,29 +103,29 @@ const CAMPAIGNS = {
       workspaceId: '44444444-4444-4444-8444-444444444441',
       name: 'Skincare — Q4 launch',
       state: 'live' as const,
-      allocated: usd('7500000'),
-      released: usd('4182050'),
-      deliverablesTotal: 240,
-      deliverablesApproved: 137,
+      allocated: usd('750000'),
+      released: usd('60000'),
+      deliverablesTotal: 50,
+      deliverablesApproved: 7,
     },
     {
       campaignId: '22222222-2222-4222-8222-222222222223',
       workspaceId: '44444444-4444-4444-8444-444444444441',
       name: 'Haircare — always-on',
       state: 'live' as const,
-      allocated: usd('4225050'),
-      released: usd('3100000'),
-      deliverablesTotal: 120,
-      deliverablesApproved: 96,
+      allocated: usd('422550'),
+      released: usd('157500'),
+      deliverablesTotal: 26,
+      deliverablesApproved: 20,
     },
     {
       campaignId: '22222222-2222-4222-8222-222222222224',
       workspaceId: '44444444-4444-4444-8444-444444444442',
       name: 'UK market test',
       state: 'draft' as const,
-      allocated: usd('0'),
+      allocated: usd('200000'),
       released: usd('0'),
-      deliverablesTotal: 40,
+      deliverablesTotal: 0,
       deliverablesApproved: 0,
     },
   ],
@@ -595,15 +597,26 @@ const BRANDS = {
   ],
 };
 
+/*
+ * Platform figures, reconciled with the brand and creator fixtures.
+ *
+ * Deliberately SMALL. An early-stage product whose internal dashboard shows
+ * six-figure revenue in a demo teaches everyone reading it to discount the
+ * screen, and the one thing this surface has to be is believed.
+ */
 const PLATFORM_STATS = {
   brandCount: 3,
-  creatorCount: 214,
-  activeDealCount: 24,
-  releasedToCreators: usd('8412050'),
-  fundsUnderManagement: usd('61475050'),
-  // Deliberately a different order of magnitude from funds under management.
-  // If these two ever look interchangeable on screen, the screen is wrong.
-  platformRevenue: usd('252361'),
+  // The four creators in the admin creators list.
+  creatorCount: 4,
+  // @mayaonmain, @priyacuts, and the offer out to @thekwongs.
+  activeDealCount: 3,
+  // 2,175.00 at Lumen plus a little at Coil & Co.
+  releasedToCreators: usd('375000'),
+  fundsUnderManagement: usd('61200000'),
+  // Fees actually earned: ~5% of what has been released. Two orders of
+  // magnitude below funds under management, which is the point — the two must
+  // never look interchangeable.
+  platformRevenue: usd('18750'),
   pendingReviews: 27,
   computedAt: '2026-09-18T07:15:00.000Z',
 };

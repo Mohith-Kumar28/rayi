@@ -21,9 +21,12 @@ const BRAND_DETAIL = {
   activeDealCount: 18,
   frozen: false,
   bankAccountStatus: 'verified' as const,
-  funded: usd('61475050'),
-  allocated: usd('11725050'),
-  released: usd('7282050'),
+  // Reconciled with the brand-side fixtures: allocated is the three campaigns
+  // (7,500 + 4,225.50 + 2,000) and released is the total across all deals.
+  // Funded is what is in the door — available + clearing + pending + allocated.
+  funded: usd('48602550'),
+  allocated: usd('1372550'),
+  released: usd('217500'),
   computedAt: '2026-09-18T07:15:00.000Z',
   workspaces: [
     { workspaceId: '44444444-4444-4444-8444-444444444441', name: 'Core skincare', campaignCount: 2 },
@@ -273,7 +276,19 @@ export const adminOpsHandlers = [
         BigInt(creator.totalReleased.amountMinor) > 0n,
     ).length;
 
-    return HttpResponse.json({ creators, blockedCount });
+    // Blocked first — the same order the server applies, because a mock that
+    // sorts differently makes the screen a person reviewed not the screen they
+    // will get.
+    const sorted = [...creators].sort((a, b) => {
+      const blocked = (row: (typeof creators)[number]) =>
+        !row.payoutsEnabled || row.payoutHoldUntil !== null ? 0 : 1;
+      return (
+        blocked(a) - blocked(b) ||
+        (BigInt(b.totalReleased.amountMinor) > BigInt(a.totalReleased.amountMinor) ? 1 : -1)
+      );
+    });
+
+    return HttpResponse.json({ creators: sorted, blockedCount });
   }),
 
   http.get('*/api/v1/admin/treasury-commands', async ({ request }) => {
