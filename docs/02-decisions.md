@@ -98,6 +98,24 @@ Organization  (a company — owns the funding balance and the Stripe relationshi
 
 ---
 
+## Settled while building the vertical slice (step 7)
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **`Campaign` is a real table now**, not deferred to step 12 | Locked | Without one, `{campaignId}` is an unvalidated UUID and the worker derives a ledger account for a campaign in another organization — a perfectly balanced posting against the wrong tenant. It carries only what allocation needs; the state machine, deals and milestones still land in step 12 |
+| **Accounts are derived, never passed in** | Locked | A caller that can name an account id can name someone else's. `ledger.account_for_campaign` reads the owning org from the campaign row, so "post to a different account" is not expressible — closes the attack the money-integrity review found ("control account ids are caller-supplied") |
+| **Authorization is two layers: guard ceiling + use-case scope** | Locked | The guard sees only the URL, so a workspace-scoped permission is not derivable from a path naming a campaign. It enforces "could you ever, anywhere in this org" — sound because a superset. The use case reads the workspace **off the campaign** and enforces "may you here". Neither is redundant, neither is sufficient alone |
+| **`movesMoney` routes require a `MoneyAuthority` row at the guard**, amount checked at the handler | Locked | The guard cannot see the amount. Pretending otherwise is exactly how a per-row limit ends up not applying to a batch |
+| **404 rather than 403 for a non-member** | Locked | A 403 confirms the organization exists, turning every tenant route into an enumeration oracle. Applied to the permission check too; the money-authority denial stays 403, because by then the caller can already see the campaign and "ask someone with authority" is the only actionable message |
+| **Idempotency key reuse with different terms is a refusal, not a replay** | Locked | Returning 202 would tell the caller their new amount was accepted while the original one posts |
+| **`expectedAvailableMinor` is checked in the WORKER** | Locked | The promise is "the server compares it against its own figure". The api literally cannot — its role has no grants on the ledger schema — so the assertion travels on the command and is checked where the truth is. It **fails** the command rather than adjusting the amount: guessing what the user would have wanted is how a system pays a number nobody chose |
+| **`org_lot_to_spend` raises on multiple lots rather than picking one** | Locked until step 11 | FIFO consumption is deposit-lifecycle work. A `LIMIT 1` would spend from an arbitrary lot and report a wrong balance while every constraint still passes — constraints satisfied and number wrong is the outcome the whole design exists to prevent |
+| **`stepUp: false` on allocate** | Locked for now | Allocation moves money between two accounts Rayi controls; nothing leaves the platform. Release is the step-up moment |
+| **The money queue is LISTEN/NOTIFY + a durable poll** | Locked | NOTIFY is fire-and-forget: raised while no worker is connected, it is gone, and Postgres drops them under load. The `pending` rows are the queue. Deleting the LISTEN makes it slower; deleting the poll makes it lose money |
+| **`TreasuryModule` (api) and `TreasuryWorkerModule` (worker) are separate modules** | Locked | A Nest module is a DI boundary, not an import boundary. Splitting them means the api graph has no processor to resolve — asserted by test — and dependency-cruiser polices the import graph separately |
+
+---
+
 ## Open questions
 
 - **Does deliverable approval require `MoneyAuthority`?** Approving a deliverable deterministically
@@ -110,3 +128,10 @@ Organization  (a company — owns the funding balance and the Stripe relationshi
   upgrade, not an incidental one.
 - **Should AWS config be required rather than optional?** Currently optional because the boilerplate
   supports local *or* S3 uploads.
+- **Does `expectedAvailableMinor` mean the org's available or the lot's?** The UI sends the org
+  figure; the worker compares it against the single spendable lot. Identical today by construction,
+  because `org_lot_to_spend` raises with more than one lot. Must be resolved when FIFO lands.
+- **Claiming a treasury command.** The listener sweeps `status = 'pending'` with no `FOR UPDATE SKIP
+  LOCKED`. Safe today because `post_entry` is idempotent and the command update is guarded on
+  `status = 'pending'`, so a race wastes work rather than corrupting state — but it needs a real
+  claim before a second worker runs.

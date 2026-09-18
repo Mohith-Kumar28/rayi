@@ -36,6 +36,71 @@ Under plain `READ COMMITTED`, Postgres re-evaluates the delta against the post-c
 **This removes the need for `SERIALIZABLE` and its 40001 retry storms.** Only the PSP clearing and
 fraud-reserve accounts carry `allow_negative`.
 
+## Idempotency has to hold CONCURRENTLY, not just sequentially
+
+`post_entry` is keyed on `(source_type, source_id)` and returns the existing entry rather than
+raising. The obvious implementation — `SELECT`, and `INSERT` if nothing came back — is idempotent
+when replays arrive one after another and **broken when they arrive together**.
+
+Two workers handed the same job both find nothing, both insert, and the loser gets SQLSTATE `23505`.
+The ledger stays correct — exactly one entry is posted, which is the guarantee that matters — but
+`23505` is classified **terminal** by the retry policy, correctly, so the loser reports a failure for
+an allocation that in fact succeeded. Its command row is then marked `failed` while a real ledger
+entry exists for it: two records of the same event disagreeing.
+
+At-least-once delivery is the contract, and two workers receiving the same notification is the normal
+case during a rolling deploy. So `post_entry` catches `unique_violation` and re-reads:
+
+```sql
+BEGIN
+  INSERT INTO ledger.entry (...) RETURNING id INTO v_entry_id;
+EXCEPTION WHEN unique_violation THEN
+  SELECT id INTO STRICT v_existing FROM ledger.entry
+   WHERE source_type = p_source_type AND source_id = p_source_id;
+  RETURN v_existing;
+END;
+```
+
+Under `READ COMMITTED` the blocked `INSERT` waits on the unique index until the other transaction
+commits or aborts, and the re-read takes a fresh snapshot, so both outcomes are handled.
+
+**How this stayed hidden:** the concurrency test caught and discarded rejections
+(`.then(id => id, () => null)`) and asserted only that the money moved once. It did. Nothing may be
+caught and discarded in a test that guards money — a swallowed rejection is a test asserting less
+than it appears to.
+
+## Accounts are DERIVED, never accepted
+
+A caller that can name an account id can name someone else's. The composite FK would still be
+satisfied, the entry would still balance, and the money would still be in the wrong organization's
+campaign — a perfectly valid posting against the wrong tenant.
+
+So callers name **what they are acting on** and the database decides which account that is:
+
+```sql
+ledger.account_for_campaign(campaign_id, role, currency)  -- derive-or-create
+ledger.org_lot_to_spend(org_id, currency)                 -- exactly one, or raise
+```
+
+`account_for_campaign` reads the owning organization **from the campaign row**, so the account is
+parented to the campaign's true owner regardless of what the caller believed. Two constraints make
+that binding real:
+
+```sql
+CHECK (campaign_id IS NULL OR org_id IS NOT NULL)
+FOREIGN KEY (campaign_id, org_id) REFERENCES campaign (id_uuid, organization_id_uuid)
+```
+
+The `CHECK` is not decoration. A composite FK is only enforced when **every** column is non-null
+(MATCH SIMPLE, the SQL default), so tagging an account with a campaign and leaving `org_id` NULL
+would otherwise bypass the parentage rule entirely.
+
+`org_lot_to_spend` **raises** when an organization holds more than one open lot rather than choosing.
+FIFO lot consumption arrives with the deposit lifecycle; until then a `LIMIT 1` would spend from an
+arbitrary lot and report a balance that is wrong while every constraint still passes. That —
+constraints satisfied, number wrong — is the one outcome this whole design exists to prevent, and it
+is worth failing loudly to avoid.
+
 ## Mutable row vs append-only snapshot — resolved, not chosen
 
 `UPDATE balance` and `INSERT snapshot` are **one SQL statement** — a CTE whose `RETURNING` feeds the

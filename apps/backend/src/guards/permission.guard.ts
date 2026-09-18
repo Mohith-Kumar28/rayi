@@ -5,10 +5,13 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { FastifyRequest } from 'fastify';
 
+import { PermissionService } from '@/authorization/permission.service';
 import { OPERATION_ACCESS } from '@/decorators/operation.decorator';
 
 /**
@@ -32,27 +35,41 @@ import { OPERATION_ACCESS } from '@/decorators/operation.decorator';
  * Unknown metadata is a denial, not a pass. If a future access kind is added and
  * this switch is not updated, routes using it stop working loudly instead of
  * becoming public quietly.
+ *
+ * **What this guard is not.** It enforces a CEILING — could this caller hold
+ * this permission anywhere in the organization named in the URL — because the
+ * URL is all it can see. The resource-scoped check belongs to the handler, which
+ * knows which workspace the campaign lives in. Neither check is redundant and
+ * neither is sufficient alone.
  */
 
 type AccessMetadata =
   | { kind: 'public' }
-  | { kind: 'permission'; permission: string; stepUp?: boolean; movesMoney?: boolean }
+  | {
+      kind: 'permission';
+      permission: string;
+      stepUp?: boolean;
+      movesMoney?: boolean;
+    }
   | { kind: 'webhook'; source: 'platform' | 'connect' };
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
   private readonly logger = new Logger(PermissionGuard.name);
 
-  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
+  constructor(
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(PermissionService) private readonly permissions: PermissionService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     // Only HTTP carries the manifest contract. WebSocket auth is handled by AuthGuard.
     if (context.getType() !== 'http') return true;
 
-    const access = this.reflector.getAllAndOverride<AccessMetadata | undefined>(OPERATION_ACCESS, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const access = this.reflector.getAllAndOverride<AccessMetadata | undefined>(
+      OPERATION_ACCESS,
+      [context.getHandler(), context.getClass()],
+    );
 
     // Routes that predate the manifest (the boilerplate's own health, user and
     // file endpoints) are governed by AuthGuard alone. Only routes that opt into
@@ -74,29 +91,78 @@ export class PermissionGuard implements CanActivate {
 
       default: {
         const exhaustive: never = access;
-        this.logger.error(`Unrecognised access kind: ${JSON.stringify(exhaustive)}`);
+        this.logger.error(
+          `Unrecognised access kind: ${JSON.stringify(exhaustive)}`,
+        );
         throw new ForbiddenException('This endpoint is not available.');
       }
     }
   }
 
-  private checkPermission(
+  private async checkPermission(
     context: ExecutionContext,
     access: Extract<AccessMetadata, { kind: 'permission' }>,
-  ): boolean {
-    const request = context.switchToHttp().getRequest<{ session?: unknown }>();
+  ): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<
+      FastifyRequest & {
+        session?: { user?: { id?: string } };
+        params?: Record<string, string>;
+      }
+    >();
 
-    if (!request.session) {
+    const userId = request.session?.user?.id;
+    if (!userId) {
       throw new UnauthorizedException('Sign in to continue.');
     }
 
-    // PermissionService lands with the tenancy model. Until then this fails
-    // CLOSED rather than waving callers through with a TODO, so no window exists
-    // in which a money route is accidentally open.
-    this.logger.warn(
-      `Permission "${access.permission}" is declared but not yet enforced — refusing. ` +
-        `PermissionService is pending the org/workspace model.`,
+    // SCOPE COMES FROM THE URL. Never from `session.activeOrganizationId`: that
+    // field is shared mutable state across browser tabs, and an agency operator
+    // with two clients open would otherwise have requests authorised against
+    // whichever org they last switched to — with the access log recording a
+    // scope that cannot be reconstructed.
+    const orgId = request.params?.['orgId'];
+    if (!orgId) {
+      // The manifest test asserts every permission-gated operation carries
+      // `{orgId}`, so reaching here means route and manifest have diverged.
+      // Refusing is the only safe reading of "I do not know whose data this is".
+      this.logger.error(
+        `Route for permission "${access.permission}" has no orgId path parameter. Refusing.`,
+      );
+      throw new ForbiddenException('This endpoint is not available.');
+    }
+
+    const couldEver = await this.permissions.couldEver(
+      userId,
+      access.permission,
+      orgId,
     );
-    throw new ForbiddenException('Authorization is not yet implemented for this endpoint.');
+    if (!couldEver) {
+      // 404, not 403. A 403 for an organization the caller does not belong to
+      // confirms that the organization exists, which turns every tenant route
+      // into an enumeration oracle.
+      this.logger.warn(
+        `Denied ${access.permission} for ${userId} in org ${orgId}.`,
+      );
+      throw new NotFoundException('Not found.');
+    }
+
+    if (access.movesMoney === true) {
+      // A money route additionally requires a MoneyAuthority row. The AMOUNT is
+      // checked by the handler — the guard cannot see it, and pretending
+      // otherwise is how a per-row limit ends up not applying to a batch.
+      const holdsAuthority = await this.permissions.holdsAnyMoneyAuthority(
+        userId,
+        access.permission,
+        orgId,
+      );
+      if (!holdsAuthority) {
+        this.logger.warn(
+          `Money authority absent: ${userId} attempted ${access.permission} in org ${orgId}.`,
+        );
+        throw new ForbiddenException('You are not authorised to move funds.');
+      }
+    }
+
+    return true;
   }
 }

@@ -1,4 +1,7 @@
-import { DEFAULT_CURRENT_PAGE, DEFAULT_PAGE_LIMIT } from '@/constants/app.constant';
+import {
+  DEFAULT_CURRENT_PAGE,
+  DEFAULT_PAGE_LIMIT,
+} from '@/constants/app.constant';
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
 import { PageOptionsDto } from './page-options.dto';

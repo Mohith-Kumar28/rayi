@@ -66,15 +66,64 @@ module.exports = {
     },
 
     {
-      name: 'treasury-is-not-http-reachable',
+      name: 'treasury-execution-is-not-http-reachable',
       severity: 'error',
       comment:
-        'THE load-bearing rule. Nothing on the public HTTP surface may import the treasury module. ' +
-        'Money movement is reached only by writing a treasury_command row inside the caller\'s ' +
-        'transaction; the worker picks it up. There is no synchronous path from a controller to a ' +
-        'Stripe call, and this rule is what keeps it that way.',
-      from: { path: '^src/(app\\.module\\.ts|main\\.ts|api/[^/]+/.*\\.controller\\.ts)$' },
-      to: { path: '^src/treasury/' },
+        'THE load-bearing rule. Nothing reachable from the public HTTP surface may import the code ' +
+        'that EXECUTES money movement — the processors, the worker module, or the queue listener. ' +
+        'The API is allowed to import treasury USE CASES, because all they do is write a ' +
+        'treasury_command row inside the caller\'s transaction; that is the intended and only path. ' +
+        'What must not exist is a synchronous route from a controller to a ledger posting or a ' +
+        'Stripe call, and this rule is what keeps it from being added by accident.',
+      from: {
+        path: '^src/(app\\.module\\.ts|main\\.ts|api/)',
+      },
+      to: {
+        path: '^src/treasury/(processors/|treasury-worker\\.module\\.ts$|treasury-command\\.listener\\.ts$)',
+      },
+    },
+
+    {
+      name: 'ledger-is-not-http-reachable',
+      severity: 'error',
+      comment:
+        'The api process must have no ledger call site at all. This mirrors the database privilege ' +
+        'boundary — the rayi_api role holds no grants on the ledger schema — so the same statement is ' +
+        'true at three independent layers: no import, no DI binding, no SQL privilege. A rule that ' +
+        'held at only one of them would be one refactor from being false.',
+      from: {
+        path: '^src/(app\\.module\\.ts|main\\.ts|api/)',
+      },
+      to: { path: '^src/ledger/' },
+    },
+
+    {
+      name: 'treasury-api-half-has-no-ledger',
+      severity: 'error',
+      comment:
+        'TreasuryModule and its use cases are bound into the api graph, so they are held to the same ' +
+        'rule as the controllers that call them. A use case that imported the ledger repository would ' +
+        'defeat the split while still looking correct in the module file.',
+      from: {
+        path: '^src/treasury/(use-cases/|treasury\\.module\\.ts$)',
+      },
+      to: { path: '^src/ledger/' },
+    },
+
+    {
+      name: 'no-controller-path-to-the-ledger',
+      severity: 'error',
+      comment:
+        'TRANSITIVE, not just direct. The rules above forbid a controller importing the ledger ' +
+        'outright; this one forbids it reaching the ledger through any chain of imports at all — a ' +
+        'helper, a shared type file, a barrel. Money movement must not be callable from a request ' +
+        'thread by any route, however indirect. ' +
+        'Note what is deliberately NOT asserted here: app.module.ts statically imports the worker ' +
+        'module, because both processes are built from one image, so the processor CODE is loaded in ' +
+        'the api process. What must not exist is a way to REACH it — no DI binding in the api graph ' +
+        '(asserted by test), no route, no Stripe credential, and no database grant.',
+      from: { path: '\\.controller\\.ts$', pathNot: '\\.spec\\.ts$' },
+      to: { path: '^src/ledger/', reachable: true },
     },
 
     {

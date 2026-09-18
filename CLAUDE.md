@@ -29,7 +29,7 @@ Project skills in `.claude/skills/` load automatically when relevant:
 
 ---
 
-## The five rules that matter most
+## The rules that matter most
 
 1. **Money is integer minor units as `bigint`, always.** Never a float, never a JS `number`, never a
    decimal string parsed with `parseFloat`. On the wire it is
@@ -41,25 +41,53 @@ Project skills in `.claude/skills/` load automatically when relevant:
    **database constraint**, not application logic.
 
 3. **The api process can never move money.** It holds no full Stripe key (refused at boot), has no
-   import path to the treasury module (enforced by dependency-cruiser), and its database role has no
-   write access to the ledger schema. It writes an intent + enqueues a job in one transaction and
-   returns 202. The **worker** performs every Stripe call.
+   import path to `src/ledger/` or `src/treasury/processors/` (dependency-cruiser, direct *and*
+   transitive), no DI binding for them (`TreasuryWorkerModule` is bound only in `WorkerModule`), and
+   its database role has no access to the ledger schema. It writes an intent + enqueues a job in one
+   transaction and returns 202. The **worker** performs every ledger post and every Stripe call.
+
+   Importing a treasury *use case* from a controller is fine — that is the intended path. What must
+   not exist is a synchronous route from a request thread to a ledger posting.
 
 4. **No external call inside a database transaction.** No Stripe, no HTTP, no notification.
 
 5. **Deny by default.** Authentication is a global guard; authorization is a second global guard that
    refuses any `@Operation()` route not declaring a permission. Tenant scope comes from the **URL**,
-   never from `session.activeOrganizationId`.
+   never from `session.activeOrganizationId`. A non-member gets **404, not 403** — a 403 confirms the
+   organization exists.
+
+   Authorization is **two layers**: the guard enforces a ceiling it can derive from the URL, the use
+   case enforces the resource-scoped check with the scope read from the database. Neither is
+   redundant and neither is sufficient alone.
+
+   Money capability is **never a role**. It is a `MoneyAuthority` row, checked separately from
+   `can()`, and the per-transaction limit is checked where the amount is visible.
+
+6. **An account is derived, never named.** A caller says which campaign it is acting on;
+   `ledger.account_for_campaign` decides which account that is and reads the owning org from the
+   campaign row. Never pass an account id in from outside the ledger.
+
+7. **A test that guards money may not swallow a rejection.** `.catch(() => null)` in a concurrency
+   test is how a real double-write defect stayed hidden through a green suite.
 
 ---
 
 ## Commands
 
 ```bash
-pnpm check                              # typecheck + test everything + verify the OpenAPI drift gate
+pnpm check                              # OpenAPI drift gate + typecheck + all tests + module boundaries
+pnpm check:db                           # migrations + the 68 integration tests (needs DATABASE_URL)
 pnpm contracts                          # regenerate openapi.json and the typed client
 pnpm --filter @rayi/backend depcruise   # module boundary enforcement
 pnpm --filter @rayi/console dev         # the SPA against MSW mocks, no backend needed
+
+# Integration tests need a real Postgres 17 — they are deliberately NOT skipped when it is absent,
+# because a silently skipped test that guards money reports green while asserting nothing.
+docker run -d --name rayi-pg -e POSTGRES_PASSWORD=rayi -e POSTGRES_USER=rayi \
+  -e POSTGRES_DB=rayi -p 55432:5432 postgres:17-alpine
+export DATABASE_URL=postgresql://rayi:rayi@localhost:55432/rayi
+pnpm --filter @rayi/backend exec prisma migrate deploy
+pnpm --filter @rayi/backend test:it
 ```
 
 ## Layout

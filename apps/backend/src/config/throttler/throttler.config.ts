@@ -24,7 +24,9 @@ export function getConfig(): ThrottlerConfig {
   return {
     enabled: enabled,
     limit: Number.parseInt(process.env.THROTTLER_LIMIT ?? '100', 10),
-    ttl: enabled ? seconds(Number.parseInt(process.env.THROTTLER_TTL ?? '60', 10)) : 0,
+    ttl: enabled
+      ? seconds(Number.parseInt(process.env.THROTTLER_TTL ?? '60', 10))
+      : 0,
   };
 }
 

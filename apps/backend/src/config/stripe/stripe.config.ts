@@ -1,7 +1,16 @@
 import validateConfig from '@/utils/config/validate-config';
 import { registerAs } from '@nestjs/config';
-import { IsOptional, IsString, Matches, Validate, ValidatorConstraint } from 'class-validator';
-import type { ValidationArguments, ValidatorConstraintInterface } from 'class-validator';
+import type {
+  ValidationArguments,
+  ValidatorConstraintInterface,
+} from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  Matches,
+  Validate,
+  ValidatorConstraint,
+} from 'class-validator';
 import process from 'node:process';
 
 import type { StripeConfig } from './stripe-config.type';
@@ -34,7 +43,8 @@ const STRIPE_SECRET_KEY = /^sk_(live|test)_/;
 @ValidatorConstraint({ name: 'stripeSecretKeyOnlyOnWorker', async: false })
 class StripeSecretKeyOnlyOnWorker implements ValidatorConstraintInterface {
   validate(value: unknown, args: ValidationArguments): boolean {
-    if (typeof value !== 'string' || !STRIPE_SECRET_KEY.test(value)) return true;
+    if (typeof value !== 'string' || !STRIPE_SECRET_KEY.test(value))
+      return true;
     const env = args.object as { IS_WORKER?: unknown };
     // Only the worker may carry a full secret key.
     return env.IS_WORKER === true || env.IS_WORKER === 'true';
@@ -62,7 +72,8 @@ class EnvironmentVariablesValidator {
   @IsString()
   @IsOptional()
   @Matches(/^rk_(live|test)_/, {
-    message: 'STRIPE_RESTRICTED_KEY must be a restricted key beginning rk_live_ or rk_test_.',
+    message:
+      'STRIPE_RESTRICTED_KEY must be a restricted key beginning rk_live_ or rk_test_.',
   })
   STRIPE_RESTRICTED_KEY: string;
 

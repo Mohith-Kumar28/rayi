@@ -166,9 +166,17 @@ export function getConfig({
       // treated as defence in depth, never as the control. Replace with a real
       // Redis INCR if this ever becomes load-bearing.
       increment: async (key) => {
-        const current = await cacheService.get({ key: 'AccessToken', args: [key] });
-        const next = (typeof current === 'number' ? current : Number(current ?? 0)) + 1;
-        await cacheService.set({ key: 'AccessToken', args: [key] }, next as never, {});
+        const current = await cacheService.get({
+          key: 'AccessToken',
+          args: [key],
+        });
+        const next =
+          (typeof current === 'number' ? current : Number(current ?? 0)) + 1;
+        await cacheService.set(
+          { key: 'AccessToken', args: [key] },
+          next as never,
+          {},
+        );
         return next;
       },
     },

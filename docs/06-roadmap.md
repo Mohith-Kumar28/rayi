@@ -3,9 +3,21 @@
 Each step ends in something demonstrable. Money moves as late as possible, and only in test mode
 until step 16.
 
-**Status: 1 ✅ · 2 ✅ · 3 🔨 in progress · 4–16 ⬜**
+**Status: 1 ✅ · 2 ✅ · 3 🟡 · 4 ✅ · 5 ✅ · 6 🟡 · 7 ✅ · 8–16 ⬜**
 
-Current test count: **142 passing** across 4 packages.
+Current test count: **271 passing**.
+
+| Suite | Tests | Needs a database |
+| --- | --- | --- |
+| `@rayi/domain` — Money, pure ledger logic | 36 | no |
+| `@rayi/contracts` — manifest invariants, OpenAPI shape | 15 | no |
+| `@rayi/api-client` — generated client + error envelope | 10 | no |
+| `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
+| `@rayi/backend` unit — config, guards, **architecture boundaries** | 112 | no |
+| `@rayi/backend` integration — ledger, authorization, treasury, HTTP, queue | **68** | **yes** |
+
+Run them: `pnpm turbo run typecheck test` for everything that needs no database, then
+`pnpm --filter @rayi/backend test:it` with `DATABASE_URL` pointed at a real Postgres 17.
 
 ---
 
@@ -41,48 +53,189 @@ Bugs found and fixed while doing this — see `05-security.md` for detail:
 rate-limiter bypassable via `X-Forwarded-For`; `DATABASE_URL` effectively optional; config error
 reporting threw while reporting errors; pagination never advertised a next page.
 
-## 🔨 3. Database foundation and the privilege boundary
+## 🟡 3. Database foundation and the privilege boundary
 
-- [ ] Ledger Prisma schema — accounts, entries, lines, balances, snapshots, idempotency keys
-- [ ] Raw-SQL migration for what Prisma cannot express: deferred `SUM=0` constraint trigger,
-      append-only triggers, `REVOKE UPDATE/DELETE`, `allow_negative` CHECK, partial unique indexes
-- [ ] Four Postgres roles (`rayi_migrator`, `rayi_api`, `rayi_worker`, `rayi_webhooks`) with the grant
-      matrix as checked-in data generating both the SQL and its conformance test
-- [ ] Boot assertion querying `pg_constraint` / `pg_trigger` — refuse to start if a control is missing
+`prisma/migrations/20260918120000_ledger_core/migration.sql` — hand-written, because Prisma cannot
+express deferred constraint triggers, generated columns, `REVOKE`, composite FKs or SECURITY DEFINER
+functions, and every one of those is load-bearing.
+
+- [x] `ledger` schema: `account`, `entry`, `entry_line`, `account_balance`, `balance_snapshot`
+- [x] Generated columns `signed_minor` (for the SUM=0 assertion) and `natural_minor` (for balances) —
+      application code never writes a sign
+- [x] `CHECK (allow_negative OR balance_minor >= 0)` — solvency as a storage-engine error
+- [x] Deferred constraint trigger asserting every entry balances and has ≥2 lines
+- [x] Append-only triggers on `entry`, `entry_line`, `balance_snapshot`
+- [x] Composite FK `(account_id, currency, normal_balance)` — a mixed-currency line is unrepresentable
+- [x] `post_entry()` — idempotent on `(source_type, source_id)` **sequentially and concurrently**;
+      balance UPDATE and snapshot INSERT in ONE statement via CTE; accounts locked in sorted order to
+      prevent deadlock
+- [x] Account **derivation** (`account_for_campaign`, `org_lot_to_spend`) — a caller names the campaign
+      it is acting on and the database decides which account that is, so "post to someone else's
+      account" is not expressible
+- [x] Composite FK `(campaign_id, org_id) → campaign(id, organizationId)` plus
+      `CHECK (campaign_id IS NULL OR org_id IS NOT NULL)` — a campaign account in the wrong
+      organization is unrepresentable, and the NULL escape hatch that a MATCH SIMPLE composite FK
+      would leave open is closed
+- [x] Three roles with grants; `rayi_api` has **no ledger access at all**
+- [ ] Boot assertion querying `pg_constraint` / `pg_trigger`
 - [ ] RLS on org-scoped tables with a `withTenant()` helper
 - [ ] Migrations as a one-off task gated on an advisory lock
 
-**Done when:** `rayi_api` gets `permission denied for schema ledger`; a cross-tenant read returns zero
-rows.
+**Verified against real Postgres 17** — all ten invariants:
 
-## ⬜ 4. Ledger core
+| # | Invariant | Result |
+| --- | --- | --- |
+| 1 | Funding posts and balances update | ✅ |
+| 2 | Replaying a `source_id` posts nothing new | ✅ one entry, balance unchanged |
+| 3 | Allocation moves value correctly | ✅ lot 300000 / campaign 200000 |
+| 4 | **Cannot overdraw** | ✅ `account_balance_non_negative` |
+| 5 | Cannot post unbalanced | ✅ "debits minus credits = 1" |
+| 6 | Cannot post a single line | ✅ |
+| 7 | Cannot post a negative amount | ✅ `entry_line_amount_positive` |
+| 8 | Cannot UPDATE or DELETE ledger rows | ✅ both refused |
+| 9 | Snapshot == balance == sum of lines | ✅ all three 300000 |
+| 10 | Every entry sums to zero, globally | ✅ 0 unbalanced |
+| 11 | Ten **concurrent** replays of one key | ✅ one entry, one snapshot, every caller told the same |
+| 12 | Campaign account in the wrong org | ✅ `account_campaign_belongs_to_org` |
+| 13 | Campaign-tagged account with no org | ✅ `account_campaign_requires_org` |
 
-- [ ] `ledger.post_entry(jsonb)` — advisory locks over sorted account ids, ≥2-line assertion,
-      deferred `SUM=0`, append-only triggers, entry dedupe, balance snapshot via CTE
-- [ ] Retry wrapper walking `.cause` for SQLSTATE `40001`/`40P01`
-- [ ] AsyncLocalStorage transaction-purity guard
-- [ ] Two-session concurrency harness
+Privilege boundary, verified:
 
-**Done when:** cannot overdraw, double-post, UPDATE, DELETE, or post unbalanced — and a forced 40001
-actually triggers a retry.
+```
+rayi_api      SELECT ledger.account    →  permission denied for schema ledger
+rayi_api      ledger.post_entry(...)   →  permission denied for schema ledger
+rayi_worker   SELECT ledger.account    →  4 rows
+rayi_worker   UPDATE ledger.entry      →  permission denied for table entry
+rayi_webhooks SELECT ledger.entry      →  permission denied for schema ledger
+```
 
-## ⬜ 5. Brand console against mocks *(parallel with 2–4)*
+## ✅ 4. Ledger core
 
-Org switcher with `orgId` in the URL, campaign list, allocation form, review queue, `<Money>` /
-`<StatusPill>` / `<Countdown>` primitives.
+`src/ledger/` — domain types (pure), repository, retry wrapper, transaction-purity guard.
 
-## ⬜ 6. Identity and authorization
+- [x] `LedgerRepository` — the only door into the ledger, all writes via `post_entry`
+- [x] **Retry wrapper** walking `.cause` for SQLSTATE, with full jitter so a burst on one hot account
+      does not retry in lockstep. All error-code knowledge in ONE file, so the eventual Prisma major
+      upgrade is a one-file change
+- [x] Retryable (`40001`, `40P01`, `55P03`) strictly separated from terminal (`23514`, `23505`,
+      `23503`, `0A000`) — an overdraft is the database being *right*, and retrying it turns a clear
+      error into five attempts and a dead letter
+- [x] **Transaction-purity guard** (AsyncLocalStorage) — any Stripe or notification call reached from
+      inside an open ledger transaction throws. Catches it many frames down, through interfaces no
+      lint rule can follow
+- [x] `verifyBalance()` — materialised vs computed vs latest snapshot, for continuous drift detection
+- [x] 26 unit tests + **12 integration tests against real Postgres**
+- [x] CI starts Postgres 17, applies the migration and runs them
 
-Better Auth behind a deny-by-default path allowlist; `/organization/*` blocked and reimplemented as
-Nest controllers with audit + step-up; `PermissionService` over a `role_permission` table; committed
-allowlist snapshot failing CI on a version bump.
+**The concurrency proof:** twenty concurrent allocations, each for the entire balance, against an
+account that can fund exactly one → **exactly one succeeds**, lot ends at 0, campaign at the full
+amount. Ten concurrent replays of one idempotency key → **one entry, money moved once**.
 
-## ⬜ 7. The vertical slice — allocate campaign budget
+Integration tests are **deliberately not auto-skipped** when the database is absent: a silently
+skipped test that guards money reports green while asserting nothing. An unreachable database fails
+loudly with the `docker run` command in the message.
+
+## ✅ 5. Brand console against mocks *(parallel with 2–4)*
+
+`orgId` in the URL, campaign list, allocation form, per-deposit lot list, `<Money>` primitive, MSW
+handlers from the generated client.
+
+- [x] Allocation form driven by generated hooks against MSW — no backend, no AWS
+- [x] `<Money>` renders from string minor units with a server-supplied exponent
+- [x] `toMinorUnits` / `allocationIdempotencyKey` extracted with 30 unit tests
+
+Still open: review queue, `<StatusPill>`, `<Countdown>`, org switcher. **Nobody has visually reviewed
+the UI** — see technical debt.
+
+## 🟡 6. Identity and authorization
+
+- [x] `PermissionService` over a `role_permission` table, 48-row matrix
+- [x] Money capability as a `MoneyAuthority` **row**, never a role string
+- [x] Org / workspace / member model with composite FKs making a cross-org pairing unrepresentable
+- [x] `PermissionGuard` enforcing deny-by-default, scope from the URL, 404 rather than 403
+- [ ] Better Auth deny-by-default **path allowlist**; `/organization/*` blocked and reimplemented as
+      Nest controllers with audit + step-up
+- [ ] Committed allowlist snapshot failing CI on a version bump
+- [ ] Generate Better Auth's `ac` object from `role_permission` at boot with an equality assertion
+
+## ✅ 7. The vertical slice — allocate campaign budget
 
 **One command, zero Stripe, zero real money**, exercising every structural claim: a genuine ledger
 movement, real UI, gated by a real permission, no external money rail.
 
-Click a button → `treasury_command` row → worker posts a ledger entry → balance updates.
+The completion criterion, met: **click a button → `treasury_command` row → worker posts a ledger
+entry → balance updates**, with the worker discovering the work for itself.
+
+### What was built
+
+- [x] `Campaign` — minimal, but real. Without it `{campaignId}` is an unvalidated UUID and the worker
+      derives an account for a campaign in another organization. Carries `@@unique([id, organizationId])`
+      so the ledger can key onto it.
+- [x] `AllocateBudgetUseCase` (api) — resolves the campaign **with the tenant predicate in the WHERE
+      clause**, derives the workspace from it, checks `can()` and then **separately**
+      `hasMoneyAuthority()`, writes the command and `pg_notify` in ONE `$transaction`, returns 202.
+      Performs no money work and has no import path to the ledger.
+- [x] `AllocateBudgetProcessor` (worker) — re-authorises from current state, re-derives both accounts
+      from the database, verifies the requester's balance assertion, posts. The command is a pointer,
+      never an instruction.
+- [x] `TreasuryCommandListener` — LISTEN/NOTIFY for latency, a 5s durable sweep for correctness.
+      Deleting the LISTEN makes it slower; deleting the sweep makes it lose money.
+- [x] `FundingController` — route, method, **status code** and permission all wired from the one
+      manifest entry. `@ValidatedBody()` recovers the operation id from the handler's own metadata, so
+      the id is written once and server validation cannot diverge from the published spec.
+- [x] `PermissionGuard` now actually enforces, deny-by-default, with scope from the URL.
+- [x] `ledger.account_for_campaign` / `ledger.org_lot_to_spend` — account **derivation**, so a caller
+      cannot name an account at all.
+- [x] Console: `toMinorUnits` and `allocationIdempotencyKey` extracted and tested; the form sends the
+      balance it rendered as an assertion.
+
+### Three real defects this step found and fixed
+
+1. **`post_entry` was not idempotent under concurrency.** Two workers handed the same job both found
+   no existing entry, both inserted, and the loser got `23505` — classified terminal, correctly — so
+   it reported failure for an allocation that had in fact posted. The command row was then marked
+   `failed` while a real ledger entry existed for it. The ledger was right and the command record was
+   wrong, which is the worst way to be wrong. `post_entry` now catches `unique_violation` and returns
+   the winner's entry. The existing concurrency test had been **swallowing rejections**, which is how
+   it stayed hidden; it no longer does.
+2. **The console's idempotency key was derived from the amount**, so a legitimate second allocation of
+   the same size was silently swallowed as a replay — the UI reported "Accepted" and nothing happened.
+   The key now includes the campaign's allocated balance, so the same request before the first lands
+   is a replay and after it lands is a new intent.
+3. **`expectedAvailableMinor` was in the contract and inert.** A security-shaped field that does
+   nothing is worse than no field. It is now carried on the command and checked **in the worker**,
+   because the api cannot see the ledger — its role holds no grants on that schema.
+
+### Two authorization checks, deliberately
+
+The guard sees only the URL, so it can answer *could this caller hold this permission anywhere in this
+organization* — a ceiling, sound because it is a superset. The handler answers *may you here*, scoped
+to the workspace it reads off the campaign. Neither is redundant and neither is sufficient alone, and
+the HTTP tests assert each rejection happens at its own layer.
+
+### How "the payment service is never publicly exposed" is now proven
+
+Four independent layers, each tested:
+
+| Layer | Mechanism | Test |
+| --- | --- | --- |
+| Import graph | `dependency-cruiser`, direct **and** transitive | `src/architecture/boundaries.spec.ts` — each rule is deliberately broken and asserted to fire |
+| DI graph | `TreasuryWorkerModule` bound only in `WorkerModule` | `funding-http.integration-spec.ts` — `app.get(AllocateBudgetProcessor)` throws |
+| Routing | `TreasuryWorkerModule` declares no controller | there is no path to expose |
+| Database | `rayi_api` has no grants on `ledger` | negative-privilege tests (step 3) |
+
+A boundary rule that has never been seen to fail is a boundary rule nobody knows still works — a typo
+in a regex silences it permanently and silently. So the rules are checked, and the checks are checked.
+
+### Deferred, deliberately
+
+- **FIFO lot consumption.** `org_lot_to_spend` **raises** when an org holds more than one open lot
+  rather than picking one. A `LIMIT 1` would spend from an arbitrary lot and report a balance that is
+  wrong while every constraint still passes. Lands with the deposit lifecycle (step 11).
+- **Step-up on allocate.** `stepUp: false` in the manifest today. Allocation moves money between two
+  accounts Rayi controls and nothing leaves the platform; release is the step-up moment.
+- **`BudgetEnvelope`.** The workspace ceiling from the architecture doc is not built. Allocation is
+  gated by `MoneyAuthority` and the non-negative constraint only.
 
 ## ⬜ 8. Staging AWS
 
@@ -146,3 +299,8 @@ while Stripe has moved on.
 - [ ] Better Auth `increment` for the rate limiter is a non-atomic read-modify-write
 - [ ] Console bundle is 640 KB (Zod client-side) — matters for the creator path on 4G, not the console
 - [ ] Nobody has visually reviewed the console UI
+- [ ] `org_lot_to_spend` raises on multiple lots — replace with FIFO consumption in step 11
+- [ ] `expectedAvailableMinor` is compared against the single spendable lot, which equals the org
+      available only while there is one lot. Revisit with FIFO.
+- [ ] `TreasuryCommandListener` sweeps every 5s with no backoff and no claim — fine for one worker,
+      needs `FOR UPDATE SKIP LOCKED` before a second one runs

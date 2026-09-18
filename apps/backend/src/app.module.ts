@@ -1,16 +1,16 @@
+import { AuthGuard } from '@/auth/auth.guard';
 import appConfig from '@/config/app/app.config';
 import authConfig from '@/config/auth/auth.config';
 import databaseConfig from '@/config/database/database.config';
 import mailConfig from '@/config/mail/mail.config';
 import redisConfig from '@/config/redis/redis.config';
+import stripeConfig from '@/config/stripe/stripe.config';
+import { PermissionGuard } from '@/guards/permission.guard';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { BullModule } from '@nestjs/bullmq';
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import stripeConfig from '@/config/stripe/stripe.config';
-import { PermissionGuard } from '@/guards/permission.guard';
-import { AuthGuard } from '@/auth/auth.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import {
@@ -25,6 +25,7 @@ import { FastifyAdapter } from '@bull-board/fastify';
 import { GracefulShutdownModule } from 'nestjs-graceful-shutdown';
 import { ApiModule } from './api/api.module';
 import { AuthModule } from './auth/auth.module';
+import { AuthorizationModule } from './authorization/authorization.module';
 import { default as awsConfig } from './config/aws/aws.config';
 import {
   BULL_BOARD_PATH,
@@ -114,6 +115,9 @@ export class AppModule {
           adapter: FastifyAdapter,
         }),
         ApiModule,
+        // PermissionGuard is an APP_GUARD declared on this module, so its
+        // dependency must be resolvable from this module's own graph.
+        AuthorizationModule,
         AuthModule.forRootAsync(),
         SocketModule,
       ],

@@ -12,7 +12,8 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "contracts": "pnpm --filter @rayi/contracts emit:openapi && pnpm --filter @rayi/api-client generate",
-    "check": "pnpm --filter @rayi/contracts verify:openapi && turbo run typecheck test"
+    "check": "pnpm --filter @rayi/contracts verify:openapi && turbo run typecheck test && pnpm --filter @rayi/backend depcruise",
+    "check:db": "pnpm --filter @rayi/backend exec prisma migrate deploy && pnpm --filter @rayi/backend test:it"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

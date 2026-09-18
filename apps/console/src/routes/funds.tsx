@@ -8,6 +8,7 @@ import {
 } from '@rayi/api-client';
 
 import { Money, formatMoney, type MoneyValue } from '../components/Money';
+import { allocationIdempotencyKey, toMinorUnits } from '../lib/allocation';
 
 /**
  * The first vertical slice: allocate budget from the organization balance to a
@@ -68,10 +69,20 @@ export function FundsScreen() {
     event.preventDefault();
     setResult(null);
 
-    // Major units -> minor units, as a string. No parseFloat: "150.50" * 100 is
-    // 15049.999999999998 in binary floating point, and that is a real lost cent.
-    const [whole = '0', fraction = ''] = amountMajor.trim().split('.');
-    const minorUnits = `${whole}${fraction.padEnd(2, '0').slice(0, 2)}`.replace(/^0+(?=\d)/, '');
+    // Major units -> minor units, as a string. Returns null rather than guessing
+    // at anything it cannot convert exactly, so a stray character or a third
+    // decimal place stops here instead of becoming a confidently wrong amount.
+    const minorUnits = toMinorUnits(amountMajor);
+
+    const campaign = campaigns.data?.campaigns.find((row) => row.campaignId === campaignId);
+    const available = funds.data?.available.amountMinor;
+
+    // All three come from what this screen actually rendered. If any is missing
+    // the screen is not in a state where an amount could have been chosen.
+    if (minorUnits === null || !campaign || available === undefined) {
+      setResult(null);
+      return;
+    }
 
     allocate.mutate(
       {
@@ -79,15 +90,27 @@ export function FundsScreen() {
         campaignId,
         data: {
           amount: { amountMinor: minorUnits, currency: 'USD' },
-          // Deterministic, derived from the intent — identical across a refresh,
-          // a second tab, or a React remount. A random key held in component
-          // state is destroyed by exactly the refresh a user reaches for when a
-          // money action appears to hang.
-          idempotencyKey: `allocate:${campaignId}:${minorUnits}`,
+          // Names the INTENT, not the attempt: identical across a refresh,
+          // different once the first allocation has landed. See lib/allocation.ts.
+          idempotencyKey: allocationIdempotencyKey({
+            campaignId,
+            allocatedMinor: campaign.allocated.amountMinor,
+            amountMinor: minorUnits,
+          }),
+          /*
+           * What this screen was showing when the amount was chosen. The server
+           * compares it against its own figure and refuses on mismatch — because
+           * "allocate $8,000 of the $10,000 I can see" is not the same decision
+           * once a colleague has spent $7,000 of it, even though $8,000 still
+           * fits. Never an instruction: no number sent from here can become a
+           * number the server acts on.
+           */
+          expectedAvailableMinor: available,
         },
       },
       {
-        onSuccess: (data) => setResult(`Accepted — command ${data.commandId.slice(0, 8)}…`),
+        onSuccess: (accepted) =>
+          setResult(`Accepted — command ${accepted.commandId.slice(0, 8)}…`),
       },
     );
   }

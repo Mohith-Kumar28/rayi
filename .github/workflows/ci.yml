@@ -34,6 +34,49 @@ jobs:
       - name: Typecheck and test
         run: pnpm turbo run typecheck test
 
+      # The ledger invariants are properties of PostgreSQL, not of our code — the
+      # non-negative CHECK, the deferred balanced-entry trigger, append-only
+      # enforcement and the concurrency behaviour. A mocked database would assert
+      # only that the mock behaves like the mock, so these run against a real one.
+      - name: Start PostgreSQL for ledger integration tests
+        run: |
+          docker run -d --name rayi-pg \
+            -e POSTGRES_PASSWORD=rayi -e POSTGRES_USER=rayi -e POSTGRES_DB=rayi \
+            -p 55432:5432 postgres:17-alpine
+          for i in $(seq 1 30); do
+            docker exec rayi-pg pg_isready -U rayi && break
+            sleep 1
+          done
+
+      - name: Apply migrations
+        run: pnpm --filter @rayi/backend exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://rayi:rayi@localhost:55432/rayi
+
+      # `migrate deploy` applies the committed migrations; `migrate diff` then
+      # asserts the schema they produce is the schema Prisma would generate from
+      # schema.prisma. Without this, a hand-written migration and the schema file
+      # can disagree indefinitely — and several of ours are hand-written, because
+      # generated columns, deferred constraint triggers, REVOKE and SECURITY
+      # DEFINER functions are not expressible in Prisma.
+      - name: Assert migrations and schema agree
+        run: |
+          pnpm --filter @rayi/backend exec prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel apps/backend/prisma/schema.prisma \
+            --exit-code && echo "schema matches" || {
+              echo "::error::prisma/schema.prisma and the migrations have diverged."
+              exit 1
+            }
+        env:
+          DATABASE_URL: postgresql://rayi:rayi@localhost:55432/rayi
+
+      - name: Integration tests (ledger, authorization, treasury, HTTP)
+        run: pnpm --filter @rayi/backend test:it
+        env:
+          LEDGER_TEST_DATABASE_URL: postgresql://rayi:rayi@localhost:55432/rayi
+          DATABASE_URL: postgresql://rayi:rayi@localhost:55432/rayi
+
       # The drift gate. Changing a contract without regenerating the spec fails
       # here rather than shipping a document that disagrees with the server.
       - name: Verify openapi.json matches the manifest

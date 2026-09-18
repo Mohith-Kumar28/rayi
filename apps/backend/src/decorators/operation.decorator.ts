@@ -1,5 +1,18 @@
-import { applyDecorators, Delete, Get, Patch, Post, Put, SetMetadata } from '@nestjs/common';
-import { ALL_OPERATIONS, type Access, type OperationDefinition } from '@rayi/contracts';
+import {
+  applyDecorators,
+  Delete,
+  Get,
+  HttpCode,
+  Patch,
+  Post,
+  Put,
+  SetMetadata,
+} from '@nestjs/common';
+import {
+  ALL_OPERATIONS,
+  type Access,
+  type OperationDefinition,
+} from '@rayi/contracts';
 
 /**
  * `@Operation('allocateBudget')` — the only way a money-bearing route is declared.
@@ -57,6 +70,11 @@ export function Operation(operationId: string): MethodDecorator {
 
   return applyDecorators(
     method(toNestPath(operation.path)),
+    // The manifest owns the status code too. A 202 that silently became a 200
+    // because someone forgot `@HttpCode` would tell a client the allocation had
+    // completed when it has only been accepted — the exact lie about money state
+    // that the UI rules forbid.
+    HttpCode(operation.successStatus),
     SetMetadata(OPERATION_ID, operationId),
     SetMetadata(OPERATION_ACCESS, operation.access satisfies Access),
   );

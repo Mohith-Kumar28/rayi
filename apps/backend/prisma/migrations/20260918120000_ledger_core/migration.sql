@@ -332,3 +332,167 @@ GRANT SELECT, INSERT ON ledger.account TO rayi_worker;
 
 -- New tables inherit the boundary rather than depending on someone remembering.
 ALTER DEFAULT PRIVILEGES IN SCHEMA ledger GRANT SELECT, INSERT ON TABLES TO rayi_worker;
+
+-- ----------------------------------------------------------------------------
+-- post_entry — the ONLY way money moves
+-- ----------------------------------------------------------------------------
+--
+-- SECURITY DEFINER so it runs as the schema owner: callers need EXECUTE on this
+-- function and nothing else, which means there is exactly one door into the
+-- ledger and it is this one.
+--
+-- Idempotent by construction. If (source_type, source_id) already exists the
+-- function returns the existing entry id and posts nothing — so a replayed
+-- Stripe webhook, a retried job, or a double-clicked button converge to one
+-- effect rather than two.
+--
+-- p_lines is [{ "account_id": uuid, "direction": "debit"|"credit",
+--               "amount_minor": bigint }]
+-- Currency and normal_balance are DERIVED from the account, never supplied by
+-- the caller — one less thing a caller can get wrong.
+
+CREATE OR REPLACE FUNCTION ledger.post_entry(
+  p_transition   text,
+  p_source_type  text,
+  p_source_id    text,
+  p_lines        jsonb,
+  p_actor        uuid    DEFAULT NULL,
+  p_request_id   text    DEFAULT NULL,
+  p_code_version text    DEFAULT NULL
+) RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ledger, pg_temp
+AS $$
+DECLARE
+  v_entry_id uuid;
+  v_existing uuid;
+  v_account  uuid;
+  v_delta    bigint;
+BEGIN
+  IF jsonb_array_length(p_lines) < 2 THEN
+    RAISE EXCEPTION 'post_entry requires at least 2 lines, got %.',
+      jsonb_array_length(p_lines) USING ERRCODE = '23514';
+  END IF;
+
+  -- Idempotency first, before any locking or balance work.
+  SELECT id INTO v_existing
+    FROM ledger.entry
+   WHERE source_type = p_source_type AND source_id = p_source_id;
+
+  IF v_existing IS NOT NULL THEN
+    RETURN v_existing;
+  END IF;
+
+  INSERT INTO ledger.entry (
+    transition, source_type, source_id, actor_principal_id, request_id, code_version
+  )
+  VALUES (
+    p_transition, p_source_type, p_source_id, p_actor, p_request_id, p_code_version
+  )
+  RETURNING id INTO v_entry_id;
+
+  -- Lines carry currency and normal_balance copied from their account, so the
+  -- composite FK rejects any mismatch and `natural_minor` is computed correctly.
+  INSERT INTO ledger.entry_line (
+    entry_id, account_id, currency, normal_balance, direction, amount_minor
+  )
+  SELECT
+    v_entry_id,
+    a.id,
+    a.currency,
+    a.normal_balance,
+    (l->>'direction')::ledger.direction,
+    (l->>'amount_minor')::bigint
+  FROM jsonb_array_elements(p_lines) AS l
+  JOIN ledger.account a ON a.id = (l->>'account_id')::uuid;
+
+  -- Every supplied line must have matched an account. A typo'd account id would
+  -- otherwise silently drop a leg and leave the entry unbalanced at COMMIT —
+  -- caught, but with a far less useful error.
+  IF (SELECT COUNT(*) FROM ledger.entry_line WHERE entry_id = v_entry_id)
+     <> jsonb_array_length(p_lines) THEN
+    RAISE EXCEPTION 'One or more account_ids in post_entry do not exist.'
+      USING ERRCODE = '23503';
+  END IF;
+
+  -- Apply balances in SORTED ACCOUNT ORDER. A canonical lock order is what stops
+  -- two concurrent postings that touch the same pair of accounts from
+  -- deadlocking against each other.
+  FOR v_account, v_delta IN
+    SELECT account_id, SUM(natural_minor)
+      FROM ledger.entry_line
+     WHERE entry_id = v_entry_id
+     GROUP BY account_id
+     ORDER BY account_id
+  LOOP
+    -- ONE STATEMENT: the UPDATE's RETURNING feeds the snapshot INSERT, so the
+    -- mutable balance and its immutable history agree by construction. If the
+    -- non-negative CHECK fires, the whole statement aborts and neither exists.
+    --
+    -- The UPDATE takes the row lock implicitly. Under READ COMMITTED, Postgres
+    -- re-evaluates `balance_minor + v_delta` against the post-commit value, so a
+    -- second concurrent writer sees the TRUE balance and the CHECK aborts it.
+    -- No SERIALIZABLE, no 40001 retry storm.
+    WITH updated AS (
+      UPDATE ledger.account_balance
+         SET balance_minor = balance_minor + v_delta,
+             version       = version + 1
+       WHERE account_id = v_account
+      RETURNING account_id, balance_minor, version
+    )
+    INSERT INTO ledger.balance_snapshot (account_id, seq, balance_after, entry_id)
+    SELECT account_id, version, balance_minor, v_entry_id FROM updated;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'No balance row for account % — accounts must be created via ledger.create_account.',
+        v_account USING ERRCODE = '23503';
+    END IF;
+  END LOOP;
+
+  RETURN v_entry_id;
+END;
+$$;
+
+-- Accounts and their balance row are created together, so a balance row can
+-- never be missing and the composite FK on allow_negative always holds.
+CREATE OR REPLACE FUNCTION ledger.create_account(
+  p_role           ledger.account_role,
+  p_currency       char(3),
+  p_normal_balance ledger.direction,
+  p_allow_negative boolean DEFAULT false,
+  p_org_id         uuid DEFAULT NULL,
+  p_deposit_id     uuid DEFAULT NULL,
+  p_campaign_id    uuid DEFAULT NULL,
+  p_deliverable_id uuid DEFAULT NULL,
+  p_creator_id     uuid DEFAULT NULL
+) RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ledger, pg_temp
+AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  INSERT INTO ledger.account (
+    role, currency, normal_balance, allow_negative,
+    org_id, deposit_id, campaign_id, deliverable_id, creator_id
+  )
+  VALUES (
+    p_role, p_currency, p_normal_balance, p_allow_negative,
+    p_org_id, p_deposit_id, p_campaign_id, p_deliverable_id, p_creator_id
+  )
+  RETURNING id INTO v_id;
+
+  INSERT INTO ledger.account_balance (account_id, allow_negative)
+  VALUES (v_id, p_allow_negative);
+
+  RETURN v_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION ledger.post_entry(text, text, text, jsonb, uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION ledger.create_account(ledger.account_role, char(3), ledger.direction, boolean, uuid, uuid, uuid, uuid, uuid) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION ledger.post_entry(text, text, text, jsonb, uuid, text, text) TO rayi_worker;
+GRANT EXECUTE ON FUNCTION ledger.create_account(ledger.account_role, char(3), ledger.direction, boolean, uuid, uuid, uuid, uuid, uuid) TO rayi_worker;

@@ -47,6 +47,8 @@ model User {
     deletedFiles File[] @relation("DeletedFiles")
 
     @@map("user")
+
+    members       Member[]
 }
 
 model Account {
@@ -161,4 +163,238 @@ model File {
     deletedBy       User?   @relation("DeletedFiles", fields: [deletedByUserId], references: [id], onDelete: SetNull)
 
     @@map("file")
+}
+
+// ============================================================================
+// TENANCY AND AUTHORIZATION
+// ============================================================================
+//
+// Organization / Member / Invitation match Better Auth's organization-plugin
+// schema exactly, so enabling that plugin later is a config change rather than a
+// migration. Workspace, WorkspaceMember, MoneyAuthority and RolePermission are
+// Rayi-owned — Better Auth has no equivalent.
+//
+// See docs/02-decisions.md for why each of these exists.
+
+model Organization {
+    id        String   @id @default(uuid())
+    name      String
+    slug      String   @unique
+    logo      String?
+    metadata  String?
+    createdAt DateTime @default(now())
+
+    members    Member[]
+    workspaces Workspace[]
+
+    @@map("organization")
+}
+
+/// Org membership. `role` is deliberately COARSE — owner/admin/member only.
+/// Money capability lives in MoneyAuthority, never here: Better Auth stores
+/// roles comma-separated and enforces no ceiling on invitations, so a
+/// `MONEY_ROLES.has(role)` check is false for 'member,finance' and an admin can
+/// invite someone as owner. See docs/05-security.md.
+model Member {
+    id             String   @id @default(uuid())
+    organizationId String
+    userId         String
+    role           String   @default("member")
+    createdAt      DateTime @default(now())
+
+    organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+    workspaceMembers WorkspaceMember[]
+    moneyAuthorities MoneyAuthority[]
+
+    @@unique([organizationId, userId])
+    /// Referenced by WorkspaceMember's composite FK so "the member and the
+    /// workspace belong to the same org" is a database invariant, not a
+    /// comparison someone can forget.
+    @@unique([id, organizationId])
+    @@map("member")
+}
+
+/// A sub-brand, product line or market. Groups campaigns and people.
+/// Holds NO money — the ledger stays org → campaign. A workspace budget is an
+/// authorization ceiling (BudgetEnvelope), not a ledger account.
+model Workspace {
+    id             String   @id @default(uuid())
+    organizationId String
+    name           String
+    slug           String
+    createdAt      DateTime @default(now())
+
+    organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    members      WorkspaceMember[]
+    campaigns    Campaign[]
+
+    @@unique([organizationId, slug])
+    @@unique([id, organizationId])
+    @@map("workspace")
+}
+
+model WorkspaceMember {
+    id             String   @id @default(uuid())
+    workspaceId    String
+    memberId       String
+    organizationId String
+    role           String   @default("viewer")
+    createdAt      DateTime @default(now())
+
+    /// Both composite FKs carry organizationId, so a member of org A cannot be
+    /// attached to a workspace in org B. Workspace slugs are unique per-org, not
+    /// globally, so without this the two independent FKs would permit exactly that.
+    workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+    member    Member    @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+    @@unique([workspaceId, memberId])
+    @@map("workspace_member")
+}
+
+/// The ONLY thing that grants the ability to move money.
+///
+/// Deliberately not a role string: it is a row, mintable only through a Rayi
+/// controller under step-up and dual control — a path Better Auth's route
+/// surface cannot reach.
+model MoneyAuthority {
+    id             String    @id @default(uuid())
+    memberId       String
+    organizationId String
+    /// e.g. 'campaign:allocate', 'deliverable:release', 'funds:refund'
+    capability     String
+    /// Per-transaction ceiling in minor units. Null means "org default applies".
+    limitMinor     BigInt?
+    grantedBy      String
+    grantedAt      DateTime  @default(now())
+    revokedAt      DateTime?
+
+    member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+    @@unique([memberId, capability])
+    @@index([organizationId])
+    @@map("money_authority")
+}
+
+/// Role → permission mapping, owned by Rayi rather than by Better Auth.
+///
+/// Single source of truth for "who can do what". Better Auth's own `ac` object is
+/// generated FROM this at boot with an equality assertion, so there is one
+/// authority rather than two that drift.
+model RolePermission {
+    id         String @id @default(uuid())
+    /// 'owner' | 'admin' | 'member' for org scope; 'workspace_admin' |
+    /// 'campaign_manager' | 'reviewer' | 'viewer' for workspace scope.
+    role       String
+    scope      String
+    permission String
+
+    @@unique([role, scope, permission])
+    @@index([role, scope])
+    @@map("role_permission")
+}
+
+/// The internal "RPC".
+///
+/// The api process writes one of these AND enqueues its job inside the SAME
+/// transaction, then returns 202. There is no internal HTTP, no mTLS and no
+/// signed assertion: this row IS the assertion. It is durable, state-machined so
+/// it cannot be replayed, idempotency-keyed, audited — and still valid for a
+/// payout sweep seven days later, which a short-lived token could never be.
+///
+/// The worker treats the payload as A POINTER, NEVER AN INSTRUCTION: it
+/// re-derives every authoritative value from the database and re-checks
+/// authorization before calling Stripe, because a sweep executes long after the
+/// request, when the approver may have been removed.
+model TreasuryCommand {
+    id   String @id @default(uuid())
+    kind String
+
+    /// DERIVED from the intent (`allocate:{campaignId}:{version}`), never random.
+    /// Identical across a page refresh, a second tab and a React remount — which
+    /// matters because a refresh is exactly what a user does when a money action
+    /// appears to hang.
+    idempotencyKey String @unique
+
+    organizationId String
+    workspaceId    String?
+    campaignId     String?
+
+    /// Requested amount, in minor units. The worker re-reads the authoritative
+    /// figure; this is recorded for audit and for comparison, never paid from.
+    amountMinor BigInt
+    currency    String
+
+    /// What the requester BELIEVED was available when they decided the amount.
+    ///
+    /// An assertion, never an instruction. The worker compares it against the
+    /// real lot balance and refuses on mismatch, because an allocation sized
+    /// against a stale figure is a decision the user did not actually make —
+    /// they meant "most of what is left", and what is left has changed.
+    ///
+    /// Carried on the command rather than checked at the API because the API
+    /// cannot see the ledger: its database role has no grants on that schema.
+    /// The check has to happen where the truth is.
+    expectedAvailableMinor BigInt?
+
+    /// pending | processing | completed | failed
+    status String @default("pending")
+
+    /// Who asked, and under what authority. Re-verified at execution time.
+    actorUserId   String
+    actorMemberId String
+    requestId     String?
+
+    /// Set once the worker has posted. Links the command to its ledger entry.
+    ledgerEntryId String?
+    failureReason String?
+
+    createdAt   DateTime  @default(now())
+    processedAt DateTime?
+
+    @@index([status, createdAt])
+    @@index([organizationId])
+    @@map("treasury_command")
+}
+
+/// A campaign — the unit budget is allocated to.
+///
+/// Minimal on purpose: the full state machine, deals and milestones land in
+/// step 12. What exists here is only what allocation genuinely needs, and it is
+/// needed. Without a Campaign row the `{campaignId}` path parameter would be an
+/// unvalidated UUID, so the worker would derive a ledger account for a campaign
+/// in another organization — a perfectly balanced posting against the wrong
+/// tenant.
+model Campaign {
+    id             String   @id @default(uuid())
+    organizationId String
+    workspaceId    String
+    name           String
+    /// draft | funded | live | paused | completed | cancelled
+    state          String   @default("draft")
+    currency       String   @default("USD")
+    createdAt      DateTime @default(now())
+
+    /// GENERATED ALWAYS columns, written by Postgres and never by application
+    /// code — an INSERT or UPDATE naming them is rejected by the database.
+    /// They project the TEXT ids into `uuid` so the ledger, which types every
+    /// identifier as `uuid`, can carry a real foreign key onto this table.
+    /// Declared here only so Prisma knows they exist and does not plan a drop.
+    idUuid             String? @default(dbgenerated()) @map("id_uuid") @db.Uuid
+    organizationIdUuid String? @default(dbgenerated()) @map("organization_id_uuid") @db.Uuid
+
+    /// The composite FK carries organizationId, so a campaign cannot point at a
+    /// workspace in a different org. Same trick as WorkspaceMember, and it is what
+    /// lets the use case derive the workspace from the campaign and trust the
+    /// result — the workspace scope a permission is checked against is then a
+    /// database fact rather than a client-supplied parameter.
+    workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+    /// Referenced by ledger account parentage: an account tagged with this
+    /// campaign is necessarily an account of this organization.
+    @@unique([id, organizationId])
+    /// The target of the ledger's parentage foreign key.
+    @@unique([idUuid, organizationIdUuid], map: "campaign_uuid_parentage_key")
+    @@index([organizationId, state])
+    @@map("campaign")
 }

@@ -16,6 +16,11 @@ can pick up without re-deriving anything.
 
 `../CLAUDE.md` is the short version, auto-loaded into every session.
 
+**Where the build is: steps 1–7 done, 8–16 to go.** The vertical slice is complete — a real HTTP
+request becomes a `treasury_command` row, and a worker picks it up and posts a balanced ledger entry,
+with no Stripe and no external money rail involved. 271 tests pass, 68 of them against a real
+Postgres. Start at [Roadmap](06-roadmap.md) to see exactly what is and is not built.
+
 ## The shortest possible summary
 
 Rayi is a conditional-payment rail for brand↔creator collaborations. A brand funds via ACH, money
@@ -42,6 +47,15 @@ Each of these cost real investigation. They are written up in full in the docs a
 - **Better Auth routes never reach the Nest guard chain**, and its roles are comma-separated, so money
   capability cannot live in `member.role`.
 - **The US fund-holding limit is 2 years**, not the 90 days in the original strategy doc.
+- **Idempotency that holds sequentially can fail under concurrency.** `SELECT`-then-`INSERT` is not
+  idempotent when two workers arrive together; the loser gets a terminal `23505` and reports failure
+  for work that succeeded. At-least-once delivery makes this the *normal* case during a deploy.
+- **A composite foreign key is only enforced when every column is non-null** (MATCH SIMPLE). A NULL in
+  one column silently bypasses the whole constraint, so parentage rules need a `CHECK` alongside.
+- **A test that swallows rejections asserts less than it appears to.** `.catch(() => null)` in a
+  concurrency test hid a real double-write defect through a green suite.
+- **`150.50 * 100` is not 15050 in every case** — `8.20 * 100` is `819.9999999999999`. Money never
+  passes through a float, at any layer, including the browser.
 
 ## Conventions
 

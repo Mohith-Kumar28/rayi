@@ -12,14 +12,20 @@ rayi/
 │   │   ├── src/
 │   │   │   ├── main.ts        entrypoint (role selected by IS_WORKER)
 │   │   │   ├── app.module.ts  .common() / .api() / .worker() / .main()
-│   │   │   ├── api/           feature modules: health, user, file
+│   │   │   ├── api/           feature modules: health, user, file, funding
+│   │   │   ├── architecture/  boundary rules asserted as tests
 │   │   │   ├── auth/          Better Auth integration + AuthGuard
+│   │   │   ├── authorization/ PermissionService — roles AND money authority
 │   │   │   ├── common/        stateless DTOs and types
 │   │   │   ├── config/        one registerAs namespace per concern
-│   │   │   ├── decorators/    field decorators, @Operation, auth decorators
+│   │   │   ├── database/      PrismaService
+│   │   │   ├── decorators/    @Operation, @ValidatedBody, auth decorators
 │   │   │   ├── guards/        PermissionGuard
+│   │   │   ├── ledger/        domain types, repository, retry, purity guard
+│   │   │   │                  ── UNREACHABLE from api/ (CI-enforced)
+│   │   │   ├── treasury/      use-cases/ (api side) + processors/ (worker side)
 │   │   │   ├── shared/        cache, mail, socket
-│   │   │   ├── worker/        BullMQ queues
+│   │   │   ├── worker/        BullMQ queues + TreasuryWorkerModule
 │   │   │   └── types/         declaration merging (fastify.d.ts)
 │   │   ├── prisma/schema.prisma
 │   │   └── .dependency-cruiser.cjs
@@ -48,14 +54,34 @@ code that moves the money.
 
 Four independent layers, because any one can be defeated:
 
-1. **Structural** — `TreasuryModule` declares no controller. There is no route to expose. Its provider
-   token is bound only in the worker's module graph.
-2. **Import graph** — dependency-cruiser refuses any import from a controller, `app.module.ts` or
-   `main.ts` into `src/treasury/`. Nest's module system is a *DI* boundary, not an *import* boundary:
-   nothing stops a file importing a service class directly.
-3. **Credentials** — the config schema refuses to boot `api` or `webhooks` if a full `sk_` Stripe key
+Treasury is **split across the process boundary**, and the split is the mechanism:
+
+| Module | Contains | Bound in |
+| --- | --- | --- |
+| `TreasuryModule` | use cases — record an intent, return 202 | the api graph |
+| `TreasuryWorkerModule` | processors + queue listener — post to the ledger | the **worker graph only** |
+
+Five independent layers, because any one can be defeated:
+
+1. **Structural** — `TreasuryWorkerModule` declares no controller. There is no route to expose, so no
+   deployment mistake can expose one.
+2. **DI graph** — the processor is bound only in `WorkerModule`. Asserted by test:
+   `app.get(AllocateBudgetProcessor, { strict: false })` **throws** on the api application.
+3. **Import graph** — dependency-cruiser refuses any import from a controller, `app.module.ts` or
+   `main.ts` into `src/ledger/` or `src/treasury/processors/`, **directly or transitively**. Nest's
+   module system is a *DI* boundary, not an *import* boundary: nothing stops a file importing a
+   service class directly. Each rule is deliberately broken in `src/architecture/boundaries.spec.ts`
+   and asserted to fire — a boundary rule that has never been seen to fail is one nobody knows still
+   works.
+4. **Credentials** — the config schema refuses to boot `api` or `webhooks` if a full `sk_` Stripe key
    is present. An RCE there yields no key and no route to one.
-4. **Database** — `rayi_api` has no write grant on the ledger schema.
+5. **Database** — `rayi_api` has no grant on the ledger schema at all.
+
+Note what is deliberately NOT claimed: both processes are built from **one image**, so the processor
+*code* is loaded in the api process. What must not exist is a way to **reach** it.
+
+Importing a treasury *use case* from a controller is allowed and intended — all a use case does is
+write a `treasury_command` row inside the caller's transaction.
 
 ### The internal "RPC" is a database row
 
@@ -69,7 +95,20 @@ rather than encrypting it.
 
 The worker treats the job payload as **a pointer, never an instruction** — it re-derives everything
 authoritative from the database, including re-checking authorization, because a weekly sweep executes
-long after the request when the approver may have been removed.
+long after the request when the approver may have been removed. Both cases are tested: authority
+revoked after the request, and the member removed from the organization, each of which fails the
+command at the worker with nothing posted.
+
+Account identities are **derived, never accepted**. `ledger.account_for_campaign(campaignId, role,
+currency)` reads the owning organization from the campaign row and returns (creating on first use)
+the one account for that scope. A caller names what it is acting on; the database decides which
+account that is. There is no parameter through which "post to a different account" can be expressed.
+
+**Discovery is two mechanisms, and only one is load-bearing.** `LISTEN/NOTIFY` gives low latency and
+is fire-and-forget — a notification raised while no worker is connected is gone, and Postgres drops
+them entirely if its queue overflows. The **poll** over `treasury_command WHERE status = 'pending'` is
+the correctness mechanism, because rows survive a crash, a deploy, a failover and a restore. Deleting
+the LISTEN would make the system slower; deleting the poll would make it lose money.
 
 ## Request flow
 
@@ -88,6 +127,29 @@ Browser (app.rayi.com)
 
 Money-moving requests stop at the application service: it writes an intent + enqueues a job in one
 transaction and returns **202**. The worker does the rest.
+
+**Authorization runs at two layers, and both are needed.**
+
+| Layer | Question | Why it cannot answer the other |
+| --- | --- | --- |
+| `PermissionGuard` | *Could this caller hold this permission anywhere in this organization?* | It sees only the URL. A workspace-scoped permission is not derivable from a path that names a campaign. |
+| Application service | *May you do this, here, for this amount?* | It runs after routing, so it cannot fail closed for a route that forgot to declare access. |
+
+The guard's check is a **ceiling**, and sound because it is a superset: a permission absent from every
+role the user holds in the organization cannot be granted by narrowing to one workspace. The service
+then reads the workspace **off the campaign row** — so the scope a permission is evaluated against is
+a database fact, not a request parameter.
+
+For a route marked `movesMoney`, the guard additionally requires a `MoneyAuthority` row to exist. The
+**amount** is checked by the service, because the guard cannot see it — and pretending otherwise is
+exactly how a per-row limit ends up not applying to a batch.
+
+Tenant scope comes from the **URL**, never from `session.activeOrganizationId`: that field is shared
+mutable state across browser tabs, so an agency operator with two clients open would otherwise have
+requests authorised against whichever org they last switched to.
+
+A caller who is not a member gets **404, not 403**. A 403 confirms the organization exists, which
+turns every tenant route into an enumeration oracle.
 
 ## The contract pipeline
 
