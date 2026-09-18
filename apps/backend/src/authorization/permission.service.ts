@@ -266,6 +266,39 @@ export class PermissionService {
   }
 
   /**
+   * Whether this user is platform staff.
+   *
+   * Resolved from the user's OWN `role` column against `role_permission` rows at
+   * `scope: 'platform'` — never from an organization membership. A platform
+   * permission reachable through an org role would make a sufficiently senior
+   * brand owner into a super-admin, and the entire value of the separation is
+   * that one compromised brand session cannot see every other brand.
+   */
+  async hasPlatformPermission(userId: string, permission: string): Promise<boolean> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { role: true },
+    });
+
+    if (!user) return false;
+
+    // Comma-separated, like everywhere else Better Auth stores a role.
+    const roles = user.role
+      .split(',')
+      .map((role) => role.trim())
+      .filter(Boolean);
+
+    if (roles.length === 0) return false;
+
+    const match = await this.prisma.rolePermission.findFirst({
+      where: { scope: 'platform', role: { in: roles }, permission },
+      select: { id: true },
+    });
+
+    return match !== null;
+  }
+
+  /**
    * The full matrix, for generating Better Auth's `ac` object at boot.
    *
    * Generated FROM this table with a startup equality assertion, so there is one

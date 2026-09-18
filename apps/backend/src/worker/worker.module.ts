@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { WebhooksWorkerModule } from '@/api/webhooks/webhooks-worker.module';
 import { TreasuryWorkerModule } from '@/treasury/treasury-worker.module';
 
+import { PlatformSnapshotModule } from './snapshot/platform-snapshot.module';
+
 import { EmailQueueModule } from './queues/email/email.module';
 
 /**
@@ -24,6 +26,11 @@ import { EmailQueueModule } from './queues/email/email.module';
  * provider timeout, and therefore cannot become a lost delivery.
  */
 @Module({
-  imports: [EmailQueueModule, TreasuryWorkerModule, WebhooksWorkerModule],
+  imports: [
+    EmailQueueModule,
+    TreasuryWorkerModule,
+    WebhooksWorkerModule,
+    PlatformSnapshotModule,
+  ],
 })
 export class WorkerModule {}

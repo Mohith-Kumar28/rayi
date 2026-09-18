@@ -1,4 +1,6 @@
-import { ProblemSchema, type Problem } from '@rayi/contracts';
+import type { Problem } from '@rayi/contracts';
+
+import { parseProblem } from './problem.js';
 
 /**
  * The single HTTP entry point for the whole frontend.
@@ -94,13 +96,17 @@ export async function rayiFetch<TResponse>(config: RayiFetchConfig): Promise<TRe
   const requestId = response.headers.get('x-request-id') ?? 'unknown';
 
   if (!response.ok) {
-    let problem: Problem;
+    // `parseProblem` rather than `ProblemSchema.parse`: importing a schema from
+    // @rayi/contracts pulls the whole operation manifest and Zod into the
+    // browser bundle. See problem.ts — the guard is tested for agreement with
+    // the schema, so the contract stays the authority without shipping it.
+    let problem: Problem | null = null;
     try {
-      problem = ProblemSchema.parse(await response.json());
+      problem = parseProblem(await response.json());
     } catch {
-      problem = fallbackProblem(response.status, requestId);
+      // A body that is not JSON at all. Falls through to the fallback below.
     }
-    throw new ApiError(problem);
+    throw new ApiError(problem ?? fallbackProblem(response.status, requestId));
   }
 
   if (response.status === 204) return undefined as TResponse;

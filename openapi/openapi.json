@@ -2339,6 +2339,2325 @@
           }
         }
       }
+    },
+    "/v1/orgs/{orgId}/review": {
+      "get": {
+        "operationId": "listReviewQueue",
+        "summary": "The review queue",
+        "tags": [
+          "review"
+        ],
+        "description": "Returns EXCEPTIONS — rows with a failed or unverifiable check, or that would release funds — plus one summary of everything that cleared. A reviewer reads the exceptions and approves the rest in one action, which is what makes three seconds a row achievable.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "campaignId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "exceptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "submissionId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "deliverableId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "dealId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "campaignName": {
+                            "type": "string"
+                          },
+                          "creatorHandle": {
+                            "type": "string"
+                          },
+                          "slot": {
+                            "type": "string"
+                          },
+                          "submissionVersion": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "submittedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "caption": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "previewUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "checks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "PASS",
+                                    "FAIL",
+                                    "ERROR"
+                                  ]
+                                },
+                                "tier": {
+                                  "type": "string",
+                                  "enum": [
+                                    "BLOCKING",
+                                    "ADVISORY"
+                                  ]
+                                },
+                                "detail": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "status",
+                                "tier",
+                                "detail"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "releasesOnApproval": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "amountMinor": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)$",
+                                    "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "enum": [
+                                      "USD",
+                                      "CAD",
+                                      "EUR",
+                                      "GBP",
+                                      "AUD",
+                                      "INR",
+                                      "JPY",
+                                      "KRW",
+                                      "BHD",
+                                      "KWD"
+                                    ],
+                                    "description": "ISO-4217 currency code."
+                                  },
+                                  "exponent": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 4,
+                                    "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                                  }
+                                },
+                                "required": [
+                                  "amountMinor",
+                                  "currency",
+                                  "exponent"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A monetary amount in integer minor units."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "submissionId",
+                          "deliverableId",
+                          "dealId",
+                          "campaignName",
+                          "creatorHandle",
+                          "slot",
+                          "submissionVersion",
+                          "submittedAt",
+                          "caption",
+                          "previewUrl",
+                          "checks",
+                          "releasesOnApproval"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cleared": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "submissionIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        },
+                        "releasesTotal": {
+                          "type": "object",
+                          "properties": {
+                            "amountMinor": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)$",
+                              "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD",
+                                "CAD",
+                                "EUR",
+                                "GBP",
+                                "AUD",
+                                "INR",
+                                "JPY",
+                                "KRW",
+                                "BHD",
+                                "KWD"
+                              ],
+                              "description": "ISO-4217 currency code."
+                            },
+                            "exponent": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 4,
+                              "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                            }
+                          },
+                          "required": [
+                            "amountMinor",
+                            "currency",
+                            "exponent"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A monetary amount in integer minor units."
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "submissionIds",
+                        "releasesTotal"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "exceptions",
+                    "cleared"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "deliverable:read",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
+    },
+    "/v1/orgs/{orgId}/submissions/{submissionId}/approve": {
+      "post": {
+        "operationId": "approveSubmission",
+        "summary": "Approve a submission",
+        "tags": [
+          "review"
+        ],
+        "description": "Writes NO ledger entry. It transitions state and leaves the release to a job that runs after the undo window — so the api never does money work inline, and every approval has a genuinely cancellable undo that never touches Stripe. An approval that would satisfy a milestone additionally requires money authority.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "submissionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "reviewId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "deliverableId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "satisfiedMilestoneIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      }
+                    },
+                    "releases": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "releasesAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "reviewId",
+                    "deliverableId",
+                    "satisfiedMilestoneIds",
+                    "releases",
+                    "releasesAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "deliverable:review",
+          "stepUp": false,
+          "movesMoney": true
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "voiceKey": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "expectedReleaseMinor": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/orgs/{orgId}/submissions/{submissionId}/request-changes": {
+      "post": {
+        "operationId": "requestChanges",
+        "summary": "Send work back for changes",
+        "tags": [
+          "review"
+        ],
+        "description": "Never satisfies a milestone, so it needs no money authority — a reviewer without one can still do the majority of the job.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "submissionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "reviewId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  },
+                  "required": [
+                    "reviewId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "deliverable:review",
+          "stepUp": false,
+          "movesMoney": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "comment": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "voiceKey": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "comment"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/orgs/{orgId}/reviews/{reviewId}/undo": {
+      "post": {
+        "operationId": "undoApproval",
+        "summary": "Undo an approval before it releases",
+        "tags": [
+          "review"
+        ],
+        "description": "Voids the review rather than deleting it, so the history shows the approval, the undo and any re-approval. Refused once the window has passed — an undo that sometimes silently does nothing is worse than one that says it is too late.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "reviewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "undone": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "undone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "deliverable:review",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
+    },
+    "/v1/me/deals": {
+      "get": {
+        "operationId": "listMyDeals",
+        "summary": "The deals you are part of",
+        "tags": [
+          "creator"
+        ],
+        "description": "Returns only deals where you are the creator. Scoped by the session user in the WHERE clause, never by a parameter — there is no creator id in this path, and there must never be one.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "deals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "dealId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "brandName": {
+                            "type": "string"
+                          },
+                          "campaignName": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "offered",
+                              "accepted",
+                              "active",
+                              "completed",
+                              "cancelled",
+                              "terminated"
+                            ]
+                          },
+                          "total": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)$",
+                                "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "CAD",
+                                  "EUR",
+                                  "GBP",
+                                  "AUD",
+                                  "INR",
+                                  "JPY",
+                                  "KRW",
+                                  "BHD",
+                                  "KWD"
+                                ],
+                                "description": "ISO-4217 currency code."
+                              },
+                              "exponent": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4,
+                                "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                              }
+                            },
+                            "required": [
+                              "amountMinor",
+                              "currency",
+                              "exponent"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A monetary amount in integer minor units."
+                          },
+                          "earned": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)$",
+                                "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "CAD",
+                                  "EUR",
+                                  "GBP",
+                                  "AUD",
+                                  "INR",
+                                  "JPY",
+                                  "KRW",
+                                  "BHD",
+                                  "KWD"
+                                ],
+                                "description": "ISO-4217 currency code."
+                              },
+                              "exponent": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4,
+                                "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                              }
+                            },
+                            "required": [
+                              "amountMinor",
+                              "currency",
+                              "exponent"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A monetary amount in integer minor units."
+                          },
+                          "milestones": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "milestoneId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "object",
+                                  "properties": {
+                                    "amountMinor": {
+                                      "type": "string",
+                                      "pattern": "^-?(0|[1-9][0-9]*)$",
+                                      "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                                    },
+                                    "currency": {
+                                      "type": "string",
+                                      "enum": [
+                                        "USD",
+                                        "CAD",
+                                        "EUR",
+                                        "GBP",
+                                        "AUD",
+                                        "INR",
+                                        "JPY",
+                                        "KRW",
+                                        "BHD",
+                                        "KWD"
+                                      ],
+                                      "description": "ISO-4217 currency code."
+                                    },
+                                    "exponent": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 4,
+                                      "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                                    }
+                                  },
+                                  "required": [
+                                    "amountMinor",
+                                    "currency",
+                                    "exponent"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "A monetary amount in integer minor units."
+                                },
+                                "satisfied": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "releasedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "milestoneId",
+                                "title",
+                                "amount",
+                                "satisfied",
+                                "reason",
+                                "releasedAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "deliverables": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "deliverableId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "slot": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "submitted",
+                                    "in_review",
+                                    "changes_requested",
+                                    "approved",
+                                    "cancelled"
+                                  ]
+                                },
+                                "brief": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "latestVersion": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "latestComment": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "deliverableId",
+                                "slot",
+                                "state",
+                                "brief",
+                                "latestVersion",
+                                "latestComment"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "nextUnlock": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "milestoneId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "object",
+                                    "properties": {
+                                      "amountMinor": {
+                                        "type": "string",
+                                        "pattern": "^-?(0|[1-9][0-9]*)$",
+                                        "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                                      },
+                                      "currency": {
+                                        "type": "string",
+                                        "enum": [
+                                          "USD",
+                                          "CAD",
+                                          "EUR",
+                                          "GBP",
+                                          "AUD",
+                                          "INR",
+                                          "JPY",
+                                          "KRW",
+                                          "BHD",
+                                          "KWD"
+                                        ],
+                                        "description": "ISO-4217 currency code."
+                                      },
+                                      "exponent": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 4,
+                                        "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                                      }
+                                    },
+                                    "required": [
+                                      "amountMinor",
+                                      "currency",
+                                      "exponent"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "A monetary amount in integer minor units."
+                                  },
+                                  "satisfied": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "releasedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "milestoneId",
+                                  "title",
+                                  "amount",
+                                  "satisfied",
+                                  "reason",
+                                  "releasedAt"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "dealId",
+                          "brandName",
+                          "campaignName",
+                          "state",
+                          "total",
+                          "earned",
+                          "milestones",
+                          "deliverables",
+                          "nextUnlock"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "deals"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "self",
+          "stepUp": false
+        }
+      }
+    },
+    "/v1/me/deals/{dealId}": {
+      "get": {
+        "operationId": "getMyDeal",
+        "summary": "One of your deals",
+        "tags": [
+          "creator"
+        ],
+        "parameters": [
+          {
+            "name": "dealId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "dealId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "brandName": {
+                      "type": "string"
+                    },
+                    "campaignName": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "offered",
+                        "accepted",
+                        "active",
+                        "completed",
+                        "cancelled",
+                        "terminated"
+                      ]
+                    },
+                    "total": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "earned": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "milestones": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "milestoneId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)$",
+                                "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "CAD",
+                                  "EUR",
+                                  "GBP",
+                                  "AUD",
+                                  "INR",
+                                  "JPY",
+                                  "KRW",
+                                  "BHD",
+                                  "KWD"
+                                ],
+                                "description": "ISO-4217 currency code."
+                              },
+                              "exponent": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4,
+                                "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                              }
+                            },
+                            "required": [
+                              "amountMinor",
+                              "currency",
+                              "exponent"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A monetary amount in integer minor units."
+                          },
+                          "satisfied": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "releasedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "milestoneId",
+                          "title",
+                          "amount",
+                          "satisfied",
+                          "reason",
+                          "releasedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "deliverables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "deliverableId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "slot": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "submitted",
+                              "in_review",
+                              "changes_requested",
+                              "approved",
+                              "cancelled"
+                            ]
+                          },
+                          "brief": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "latestVersion": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "latestComment": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "deliverableId",
+                          "slot",
+                          "state",
+                          "brief",
+                          "latestVersion",
+                          "latestComment"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextUnlock": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "milestoneId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "object",
+                              "properties": {
+                                "amountMinor": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9][0-9]*)$",
+                                  "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                                },
+                                "currency": {
+                                  "type": "string",
+                                  "enum": [
+                                    "USD",
+                                    "CAD",
+                                    "EUR",
+                                    "GBP",
+                                    "AUD",
+                                    "INR",
+                                    "JPY",
+                                    "KRW",
+                                    "BHD",
+                                    "KWD"
+                                  ],
+                                  "description": "ISO-4217 currency code."
+                                },
+                                "exponent": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 4,
+                                  "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                                }
+                              },
+                              "required": [
+                                "amountMinor",
+                                "currency",
+                                "exponent"
+                              ],
+                              "additionalProperties": false,
+                              "description": "A monetary amount in integer minor units."
+                            },
+                            "satisfied": {
+                              "type": "boolean"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "releasedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "milestoneId",
+                            "title",
+                            "amount",
+                            "satisfied",
+                            "reason",
+                            "releasedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "dealId",
+                    "brandName",
+                    "campaignName",
+                    "state",
+                    "total",
+                    "earned",
+                    "milestones",
+                    "deliverables",
+                    "nextUnlock"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "self",
+          "stepUp": false
+        }
+      }
+    },
+    "/v1/me/deliverables/{deliverableId}/submit": {
+      "post": {
+        "operationId": "submitDeliverable",
+        "summary": "Submit work for a deliverable",
+        "tags": [
+          "creator"
+        ],
+        "description": "Creates a NEW submission version. A revision never edits the previous attempt, because a dispute six months later must be able to show attempt 1, what was said about it, and attempt 2 side by side.",
+        "parameters": [
+          {
+            "name": "deliverableId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "submissionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "submissionId",
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "self",
+          "stepUp": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "assetKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "caption": {
+                    "type": "string",
+                    "maxLength": 2200
+                  }
+                },
+                "required": [
+                  "assetKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/earnings": {
+      "get": {
+        "operationId": "getMyEarnings",
+        "summary": "What you have earned",
+        "tags": [
+          "creator"
+        ],
+        "description": "Three figures that are deliberately distinct: paid out, released and awaiting the next payout run, and agreed but not yet unlocked. Collapsing them into one number would tell a creator they have money they cannot spend.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "paidOut": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "awaitingPayout": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "agreedNotYetUnlocked": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    }
+                  },
+                  "required": [
+                    "paidOut",
+                    "awaitingPayout",
+                    "agreedNotYetUnlocked"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "self",
+          "stepUp": false
+        }
+      }
+    },
+    "/v1/admin/brands": {
+      "get": {
+        "operationId": "listBrands",
+        "summary": "Every brand on the platform",
+        "tags": [
+          "admin"
+        ],
+        "description": "Reads across tenants. Available only to platform staff, from an isolated origin, and every call is logged — a cross-tenant read nobody can account for is how one gets added carelessly.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "brands": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "organizationId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "slug": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "memberCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "campaignCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "activeDealCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "organizationId",
+                          "name",
+                          "slug",
+                          "createdAt",
+                          "memberCount",
+                          "campaignCount",
+                          "activeDealCount"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "brands"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "platform:read",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
+    },
+    "/v1/admin/stats": {
+      "get": {
+        "operationId": "getPlatformStats",
+        "summary": "Platform-wide figures",
+        "tags": [
+          "admin"
+        ],
+        "description": "Funds under management and platform revenue are DIFFERENT numbers and are never added together. One is brands’ money sitting at Stripe; the other is what Rayi has earned.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "brandCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "creatorCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "activeDealCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "releasedToCreators": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "fundsUnderManagement": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "platformRevenue": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "pendingReviews": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "computedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "brandCount",
+                    "creatorCount",
+                    "activeDealCount",
+                    "releasedToCreators",
+                    "fundsUnderManagement",
+                    "platformRevenue",
+                    "pendingReviews",
+                    "computedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "platform:read",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
+    },
+    "/v1/admin/ledger-health": {
+      "get": {
+        "operationId": "getLedgerHealth",
+        "summary": "Do the books agree with themselves?",
+        "tags": [
+          "admin"
+        ],
+        "description": "Every list here must be empty. A non-empty one means the ledger disagrees with itself, and nothing else on the platform can be trusted until it is explained.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "checkedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unbalancedEntries": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "driftedAccounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "auditChainBreaks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seq": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "seq",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "failedCommands": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "checkedAt",
+                    "unbalancedEntries",
+                    "driftedAccounts",
+                    "auditChainBreaks",
+                    "failedCommands"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "platform:read",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
     }
   },
   "components": {

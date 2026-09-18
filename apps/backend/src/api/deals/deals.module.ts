@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '@/authorization/authorization.module';
 import { PrismaModule } from '@/database/prisma.module';
 
+import { ReviewController } from './review.controller';
+import { ReviewQueueService } from './review-queue.service';
 import { ReviewService } from './review.service';
 
 /**
@@ -18,7 +20,8 @@ import { ReviewService } from './review.service';
  */
 @Module({
   imports: [PrismaModule, AuthorizationModule],
-  providers: [ReviewService],
-  exports: [ReviewService],
+  controllers: [ReviewController],
+  providers: [ReviewService, ReviewQueueService],
+  exports: [ReviewService, ReviewQueueService],
 })
 export class DealsModule {}

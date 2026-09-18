@@ -112,6 +112,30 @@ export class PermissionGuard implements CanActivate {
     }
   }
 
+  /**
+   * Whether this user is platform staff.
+   *
+   * Deliberately NOT resolved through the organization role matrix. A platform
+   * permission reachable from an org role would make a sufficiently senior brand
+   * owner into a super-admin — and the whole point of the separation is that one
+   * compromised brand session must not see every other brand.
+   *
+   * Resolved from `role_permission` at `scope: 'platform'`, which no organization
+   * role can hold, joined to the user's own `role` column rather than to any
+   * membership.
+   */
+  private async checkPlatformPermission(userId: string, permission: string): Promise<boolean> {
+    const allowed = await this.permissions.hasPlatformPermission(userId, permission);
+
+    if (!allowed) {
+      // 404, like every other refusal: a 403 would confirm the admin surface
+      // exists at this path, which is a free signal to anyone probing it.
+      this.logger.warn(`Denied platform permission ${permission} for ${userId}.`);
+      throw new NotFoundException('Not found.');
+    }
+    return true;
+  }
+
   /** Authentication only. Used by `self` routes, which have no tenant to check. */
   private requireSession(context: ExecutionContext): boolean {
     const request = context
@@ -145,6 +169,17 @@ export class PermissionGuard implements CanActivate {
     // with two clients open would otherwise have requests authorised against
     // whichever org they last switched to — with the access log recording a
     // scope that cannot be reconstructed.
+    // A PLATFORM route reads across tenants by design — the super-admin surface.
+    // It has no orgId because it is not scoped to one, so the tenant checks below
+    // do not apply and must not be run against a missing value.
+    //
+    // The prefix is the declaration, and the manifest test asserts the two forms
+    // are mutually exclusive: a platform route never carries an orgId, and a
+    // tenant route always does.
+    if (access.permission.startsWith('platform:')) {
+      return this.checkPlatformPermission(userId, access.permission);
+    }
+
     const orgId = request.params?.['orgId'];
     if (!orgId) {
       // The manifest test asserts every permission-gated operation carries

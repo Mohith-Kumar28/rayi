@@ -380,19 +380,21 @@ ALTER TABLE "deliverable"
   CHECK ((state = 'approved') = ("approvedAt" IS NOT NULL));
 
 -- ----------------------------------------------------------------------------
--- Tenant isolation, consistent with every other org-scoped table
+-- Tenant isolation is applied in a LATER migration
 -- ----------------------------------------------------------------------------
-
-ALTER TABLE "deal" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "deal" FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY deal_tenant_isolation ON "deal"
-  USING ("organizationId" = public.current_tenant())
-  WITH CHECK ("organizationId" = public.current_tenant());
-
-CREATE POLICY deal_cross_tenant ON "deal"
-  USING (public.is_cross_tenant())
-  WITH CHECK (public.is_cross_tenant());
+--
+-- The RLS policies for `deal` live in `20260918211000_deal_row_level_security`,
+-- not here, because they call `public.current_tenant()` — and that function is
+-- created by `20260918200000_row_level_security`, which sorts AFTER this file.
+--
+-- On the database where these were authored the ordering was invisible: they
+-- were applied in creation order and the function already existed. A FRESH
+-- deploy replays them in filename order, and this migration would have failed
+-- with "function public.current_tenant() does not exist".
+--
+-- Caught by Prisma's shadow database, which replays from scratch. A migration
+-- that only works on a database that already has the next migration's objects is
+-- not a migration.
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON
   "deal", "agreement_version", "milestone", "deliverable", "submission", "review", "deal_transition"

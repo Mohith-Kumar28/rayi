@@ -948,3 +948,44 @@ model DealTransition {
     @@index([dealId, createdAt])
     @@map("deal_transition")
 }
+
+/// Platform-wide figures, computed by the WORKER and read by the admin surface.
+///
+/// The admin surface cannot read the ledger directly, and the reason is not a
+/// lint rule: `rayi_api` has no grants on the `ledger` schema at all, so those
+/// queries would fail in production while passing in development as a
+/// superuser. A snapshot is the only shape that respects the privilege boundary
+/// rather than pretending to.
+///
+/// It is also the better design operationally. `ledgerHealth` iterating every
+/// account per request does not scale past a few thousand accounts, and the
+/// figures behind a board deck should be computed on a schedule anyway — a
+/// number that is four minutes old and correct beats one that is live and
+/// sometimes times out.
+model PlatformSnapshot {
+    /// Singleton, like `cluster_identity`. A second row would be a second answer
+    /// to "how is the platform doing", and nobody would know which was current.
+    onlyRow Boolean @id @default(true)
+
+    brandCount      Int
+    creatorCount    Int
+    activeDealCount Int
+    pendingReviews  Int
+
+    /// Money that has actually moved to creators.
+    releasedToCreatorsMinor BigInt
+    /// Brands' money sitting at Stripe. NOT revenue, and never added to it.
+    fundsUnderManagementMinor BigInt
+    /// What Rayi has actually earned in fees.
+    platformRevenueMinor BigInt
+
+    /// Ledger health. Every one of these must be zero or empty.
+    unbalancedEntryIds String[]
+    driftedAccountIds  String[]
+    auditChainBreaks   Json     @default("[]")
+    failedCommandCount Int      @default(0)
+
+    computedAt DateTime @default(now())
+
+    @@map("platform_snapshot")
+}

@@ -301,6 +301,43 @@ no `SameSite=None`, no CHIPS workaround, and `connect-src 'self'` is literally t
 content and is same-SITE with the app**, so `SameSite=Lax` would attach the session cookie — every
 mutation must therefore check `Origin` is the exact app origin and `Sec-Fetch-Site` is `same-origin`.
 
+## The frontend: three populations, one SPA
+
+```
+app.rayi.com                     one Vite + TanStack Router SPA
+  /o/$orgId/review               BRAND — the index route. Not a dashboard
+  /o/$orgId/funds                BRAND
+  /o/$orgId/members              BRAND
+  /me/security                   SELF  — not org-scoped; the resource is the caller
+  /me, /me/deals/$dealId         CREATOR — lazily loaded
+  /admin                         PLATFORM — lazily loaded; belongs on its own origin
+
+rayi.com                         public SSR (TanStack Start), five pages, not built yet
+```
+
+**Everything authenticated is one origin.** The API is same-origin via a CloudFront `/api/*`
+behaviour, so the session cookie is host-only, there is no CORS, no preflight, no `SameSite=None`,
+and `connect-src 'self'` is literally true.
+
+**The creator tree is lazily loaded, and that is not an optimisation.** A creator opens this on a
+phone, often on mobile data, to check one payout. Shipping them the brand review queue and members
+table is a cost paid by the population that can least afford it — and it is the population that
+receives the money. The creator chunks are ~9 KB; the shared shell is still 580 KB, which is the
+remaining problem and needs a separate entry point rather than a lazy route.
+
+**`/admin` shares an origin today and should not.** It is the only surface that reads across tenants,
+so an XSS anywhere in the brand or creator app reaching an admin session is the worst available
+outcome. Lazy loading keeps it out of other bundles; origin isolation is a deployment change and is
+on the roadmap rather than claimed here.
+
+### Zod is not in the browser
+
+`ProblemSchema.parse` in the fetcher pulled the entire operation manifest and Zod into every
+visitor's bundle — 672 KB shipped so a failed request could be parsed. `parseProblem` is a narrow
+hand-written guard instead, and `problem.test.ts` feeds it and the contract's own schema the same
+inputs and asserts they agree. The contract stays the authority without being shipped, and drift is a
+failing test rather than a surprise in an error path nobody looks at.
+
 ## Money on the wire
 
 ```json

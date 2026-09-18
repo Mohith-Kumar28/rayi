@@ -14,6 +14,17 @@ import { MINOR_UNITS_PATTERN } from './money.js';
 
 const document = buildOpenApiDocument(ALL_OPERATIONS, { title: 'test', version: '0' });
 
+/**
+ * A route that reads across tenants.
+ *
+ * Identified by its permission prefix rather than by a list, so adding a
+ * cross-tenant endpoint means naming it `platform:` — which is visible in the
+ * manifest, in the guard, and in the role matrix.
+ */
+function isPlatformScoped(operation: (typeof ALL_OPERATIONS)[number]): boolean {
+  return operation.access.kind === 'permission' && operation.access.permission.startsWith('platform:');
+}
+
 describe('every operation declares its access', () => {
   it.each(ALL_OPERATIONS.map((op) => [op.operationId, op] as const))(
     '%s declares access',
@@ -70,13 +81,43 @@ describe('path parameters are declared, not implied', () => {
     }
   });
 
-  it('scopes every tenant route by an explicit orgId in the path', () => {
-    // Scope must come from the URL, never from session.activeOrganizationId: that
-    // field is shared mutable state across tabs, so an agency operator with two
-    // clients open would otherwise act against the wrong organization.
-    const tenantOperations = ALL_OPERATIONS.filter((op) => op.access.kind === 'permission');
+  it('scopes every TENANT route by an explicit orgId in the path', () => {
+    // Scope must come from the URL, never from session.activeOrganizationId:
+    // that field is shared mutable state across tabs, so an agency operator with
+    // two clients open would otherwise act against the wrong organization.
+    const tenantOperations = ALL_OPERATIONS.filter(
+      (op) => op.access.kind === 'permission' && !isPlatformScoped(op),
+    );
+
     for (const operation of tenantOperations) {
       expect(operation.path, `${operation.operationId} is not org-scoped`).toContain('{orgId}');
+    }
+  });
+
+  it('marks a CROSS-TENANT route with a platform: permission, and no orgId', () => {
+    // The super-admin surface reads across tenants, which makes it the highest
+    // value target in the product — one compromised session sees every brand's
+    // position. So "this route is not tenant-scoped" is a DECLARED property
+    // rather than the absence of one, and the two forms are mutually exclusive:
+    // a platform route must not carry an orgId, and a tenant route must.
+    for (const operation of ALL_OPERATIONS) {
+      if (!isPlatformScoped(operation)) continue;
+      expect(
+        operation.path,
+        `${operation.operationId} is platform-scoped but carries an orgId`,
+      ).not.toContain('{orgId}');
+    }
+  });
+
+  it('gives no ORGANIZATION role a platform permission', () => {
+    // A platform permission held by an org role would make a sufficiently senior
+    // brand owner into a super-admin. They are different populations, and the
+    // prefix is what keeps them apart.
+    for (const operation of ALL_OPERATIONS) {
+      if (operation.access.kind !== 'permission') continue;
+      const { permission } = operation.access;
+      const platform = permission.startsWith('platform:');
+      expect(platform, `${operation.operationId}`).toBe(isPlatformScoped(operation));
     }
   });
 });

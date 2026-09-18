@@ -132,6 +132,18 @@ pnpm --filter @rayi/backend migrate:deploy   # guarded: refuses a disabled advis
 pnpm --filter @rayi/backend test:it
 ```
 
+## Frontend rules
+
+- **Never import a schema from `@rayi/contracts` into browser code.** It has one barrel export, so
+  one import pulls the whole manifest and Zod into the bundle. Use `parseProblem`, or add a narrow
+  guard with an agreement test beside it.
+- **The UI never asserts money moved.** Approving shows `Releasing in 0:58 · Undo`, not "paid".
+  Timing comes from the server's `releasesAt` — never a client-side copy of the window.
+- **`ERROR` is not `FAIL`** on a verification check. It reads "could not verify" and never blocks: a
+  creator must not be punished for our infrastructure.
+- **Funds under management is not revenue**, and the two are never summed or shown together.
+- The creator surface is lazily loaded. Adding a brand import to it is a regression.
+
 ## Layout
 
 ```

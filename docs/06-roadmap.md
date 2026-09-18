@@ -8,13 +8,13 @@ until step 16.
 Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
 Better Auth account endpoints that are currently blocked rather than replaced.
 
-Current test count: **705 passing**.
+Current test count: **751 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
 | `@rayi/domain` — Money, **milestone conditions, deal evaluation** | 88 | no |
-| `@rayi/contracts` — manifest invariants, OpenAPI shape | 44 | no |
-| `@rayi/api-client` — generated client + error envelope | 10 | no |
+| `@rayi/contracts` — manifest invariants, OpenAPI shape | 68 | no |
+| `@rayi/api-client` — generated client, **problem guard ↔ schema agreement** | 32 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
 | `@rayi/backend` unit — config, guards, auth allowlist, mail, **two webhook signature schemes**, TOTP (RFC 6238 vectors), architecture boundaries | 274 | no |
 | `@rayi/backend` integration — ledger, integrity, audit, authorization, treasury, account, step-up, members, RLS, webhooks, **review queue**, HTTP, queue | **259** | **yes** |
@@ -237,7 +237,7 @@ Integration tests are **deliberately not auto-skipped** when the database is abs
 skipped test that guards money reports green while asserting nothing. An unreachable database fails
 loudly with the `docker run` command in the message.
 
-## ✅ 5. Brand console against mocks *(parallel with 2–4)*
+## 🟡 5. The frontend — brand, creator and admin
 
 `orgId` in the URL, campaign list, allocation form, per-deposit lot list, `<Money>` primitive, MSW
 handlers from the generated client.
@@ -250,9 +250,78 @@ handlers from the generated client.
       authenticator removal, and the audit trail the user can read about themselves
 - [x] **People screen** (`/o/$orgId/members`) — roles, invitations, and a **"Can move funds" flag**,
       because capability granted separately from any role is also invisible unless a surface shows it
+- [x] **Review queue** (`/o/$orgId/review`) — the brand index route, and the signature screen
+- [x] **Creator surface** (`/me`, `/me/deals/$dealId`) — lazily loaded
+- [x] **Super admin** (`/admin`) — brands, platform figures, ledger health
+- [ ] Origin isolation for `/admin` — it is lazily loaded but shares an origin, which is a
+      deployment change, not a code one
+- [ ] Deal and campaign authoring: the brand can review work but cannot yet create the deal
+- [ ] `<StatusPill>`, `<Countdown>`, org switcher, public `/@handle` pages
+- [ ] **Nobody has visually reviewed any of these screens**
 
-Still open: review queue, `<StatusPill>`, `<Countdown>`, org switcher. **Nobody has visually reviewed
-the UI** — see technical debt.
+### The review queue is exceptions plus one bar
+
+Three seconds a row is a claim about SHAPE, not speed. The server returns rows that need a
+decision — a failed or unverifiable check, or an approval that would release funds — and **one
+collapsed summary** of everything that cleared. A queue that shows everything is a queue people
+abandon.
+
+- **Keyboard first.** `j`/`k` move, `a` approves, `c` requests changes, `u` undoes. Reaching for a
+  mouse per row is most of the three seconds.
+- **`ERROR` is not `FAIL`.** A check that could not run reads "could not verify", in a neutral
+  colour, and never blocks — a creator must not be punished for our infrastructure.
+- **A truthful pending lane.** On approve the row moves to `Releasing in 0:58 · Undo`. Felt speed is
+  identical to optimistic rendering, but the UI never asserts money moved, because it has not.
+- **No client-side copy of the undo window.** The countdown is driven entirely by the server's
+  `releasesAt`. A duplicated constant would drift into an Undo button offered after the release job
+  had already run.
+
+### The creator surface is a different product
+
+A phone, opened between takes, answering one question: *when do I get paid, and what do I have to do
+to get paid?* It shows three money figures that are deliberately never collapsed into one — paid out,
+on its way, and not unlocked yet. `agreedNotYetUnlocked` is not called "earned", because a creator
+will plan around whatever number they are shown.
+
+The "what unlocks my next payment" sentence is produced by `evaluateDeal` — the same function that
+decides whether money moves — so this screen structurally cannot promise what the engine will not do.
+
+**Lazily loaded, and that is not an optimisation.** Shipping the brand review queue and members table
+to a creator on mobile data is a cost paid by the population that can least afford it.
+
+### The admin surface, and the number that must never be added
+
+**Funds under management is not revenue.** One is brands' money sitting at Stripe; the other is what
+Rayi has earned. They are rendered in different sections, with different weight, and the copy says
+"never add this to the figure on the left" — because the mistake gets repeated in every deck built
+from the dashboard.
+
+**Ledger health is rendered first, and loudly.** Every list must be empty; a non-empty one means the
+books disagree with themselves and no other number can be trusted. "Never checked" renders as its own
+state and never as a green tick.
+
+### What the boundary rules caught while building this
+
+The first admin service read the ledger directly. dependency-cruiser refused it — and the rule was
+right for a reason deeper than the rule: **`rayi_api` has no grants on the `ledger` schema at all**,
+so those queries would have failed in production while passing in development as a superuser.
+
+Rewritten as a worker-computed `platform_snapshot`. That is also the better design: the health check
+verifies every account's balance against the sum of its lines, which does not belong in a request
+path. Every figure carries the timestamp it was computed at, and a missing snapshot returns 503
+rather than zeros — zeros on a revenue dashboard are indistinguishable from a business that has
+earned nothing, and somebody will screenshot them.
+
+### And a migration-ordering bug, caught by the shadow database
+
+`campaign_domain` was written after the RLS migration and called
+`public.current_tenant()` — which that later file creates. Applied in creation order it worked;
+**replayed in filename order, which is what a fresh deploy does, it failed outright.**
+
+The cause is systemic and is now written down in `prisma/migrations/README.md`: several migrations
+were hand-named with timestamps in the FUTURE, so newly generated ones sort before them. The RLS
+policies moved to their own correctly-ordered file, and CI already replays the whole chain from an
+empty database on every push.
 
 ## ✅ 6. Identity and authorization
 
@@ -743,7 +812,13 @@ while Stripe has moved on.
 
 - [ ] Prisma 6.19.3 → 7.10.x (deliberate upgrade, not incidental)
 - [ ] Better Auth `increment` for the rate limiter is a non-atomic read-modify-write
-- [ ] Console bundle is 640 KB (Zod client-side) — matters for the creator path on 4G, not the console
+- [x] ~~Console bundle is 640 KB (Zod client-side)~~ — 672 KB → **580 KB** (216 → 190 KB gzipped) by
+      replacing `ProblemSchema.parse` with a narrow hand-written guard. Importing one schema from
+      `@rayi/contracts` pulled the entire operation manifest AND Zod into the browser. The guard is
+      tested for agreement with the schema on every input, so the contract stays the authority
+      without being shipped
+- [ ] 580 KB is still large — the rest is React, TanStack Router and Query. The creator path needs
+      its own entry point, not just a lazy route, to avoid the shared shell
 - [ ] Nobody has visually reviewed the console UI
 - [ ] `org_lot_to_spend` raises on multiple lots — replace with FIFO consumption in step 11
 - [ ] `expectedAvailableMinor` is compared against the single spendable lot, which equals the org
@@ -752,5 +827,5 @@ while Stripe has moved on.
       claims are atomic, leases expire after 5 minutes so a dead worker's command is reclaimed, and
       `attempts` is capped at 5 so a poison command stops being retried instead of becoming a hot loop
 - [ ] The seed script creates an admin with a password, which no longer signs anyone in
-- [ ] Nobody has visually reviewed the new console screens either
+
 - [ ] The console bundle is now 659 KB — the creator path on 4G needs its own entry point

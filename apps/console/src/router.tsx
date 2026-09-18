@@ -2,62 +2,92 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Link,
   Outlet,
   redirect,
+  useMatchRoute,
 } from '@tanstack/react-router';
+
+import { MOCK_IDS } from '@rayi/api-client/mocks';
 
 import { FundsScreen } from './routes/funds';
 import { MembersScreen } from './routes/members';
+import { ReviewScreen } from './routes/review';
 import { SecurityScreen } from './routes/security';
-import { MOCK_IDS } from '@rayi/api-client/mocks';
-
-const rootRoute = createRootRoute({
-  component: () => (
-    <div className="min-h-full bg-canvas">
-      <header className="border-b border-hair bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <div className="flex items-baseline gap-6">
-            <span className="text-sm font-semibold tracking-tight text-ink">Rayi</span>
-            <Nav />
-          </div>
-          <ScenarioSwitcher />
-        </div>
-      </header>
-      <Outlet />
-    </div>
-  ),
-});
 
 /**
- * The three surfaces that exist so far.
+ * One SPA, two populations, one origin.
  *
- * `orgId` is in the path on every tenant route — never read from the session,
- * because that is shared mutable state across tabs and an agency operator with
- * two clients open would act against the wrong brand.
+ * `app.rayi.com` serves both authed route trees — `/o/$orgId/*` for brands and
+ * `/me/*` for creators. Because the API is same-origin there is no CORS, no
+ * preflight, no `SameSite=None`, and `connect-src 'self'` is literally true.
+ * That single decision removes an entire category of cookie and CSRF problems.
+ *
+ * **The creator tree is lazily loaded, and that is not an optimisation.** A
+ * creator opens this on a phone, often on mobile data, to check one payout.
+ * Shipping them the brand review queue, the funds screen and the members table
+ * is a real cost paid by the population that can least afford it — and it is the
+ * population that receives the money.
  */
-function Nav() {
+
+const rootRoute = createRootRoute({
+  component: RootLayout,
+});
+
+function RootLayout() {
+  const matchRoute = useMatchRoute();
+  // The creator surface gets no brand chrome. It is a different product for a
+  // different person, and a nav bar full of things they cannot use is noise on a
+  // screen that has one job.
+  const isCreator = Boolean(matchRoute({ to: '/me', fuzzy: true }));
+
+  return (
+    <div className="min-h-full bg-canvas">
+      {!isCreator && (
+        <header className="border-b border-hair bg-white">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
+            <div className="flex items-baseline gap-6">
+              <span className="text-sm font-semibold tracking-tight text-ink">Rayi</span>
+              <BrandNav />
+            </div>
+            <ScenarioSwitcher />
+          </div>
+        </header>
+      )}
+      <Outlet />
+    </div>
+  );
+}
+
+/**
+ * `orgId` is in the path on every tenant route — never read from the session.
+ * That field is shared mutable state across tabs, so an agency operator with two
+ * clients open would otherwise act against the wrong brand.
+ */
+function BrandNav() {
   const linkClass = 'text-sm text-muted hover:text-ink';
   const activeClass = 'text-sm font-medium text-ink';
 
   return (
     <nav className="flex items-center gap-4">
-      <Link
-        to="/o/$orgId/funds"
-        params={{ orgId: MOCK_IDS.ORG_ID }}
-        className={linkClass}
-        activeProps={{ className: activeClass }}
-      >
-        Funds
-      </Link>
-      <Link
-        to="/o/$orgId/members"
-        params={{ orgId: MOCK_IDS.ORG_ID }}
-        className={linkClass}
-        activeProps={{ className: activeClass }}
-      >
-        People
-      </Link>
+      {(
+        [
+          ['/o/$orgId/review', 'Review'],
+          ['/o/$orgId/funds', 'Funds'],
+          ['/o/$orgId/members', 'People'],
+        ] as const
+      ).map(([to, label]) => (
+        <Link
+          key={to}
+          to={to}
+          params={{ orgId: MOCK_IDS.ORG_ID }}
+          className={linkClass}
+          activeProps={{ className: activeClass }}
+        >
+          {label}
+        </Link>
+      ))}
       <Link to="/me/security" className={linkClass} activeProps={{ className: activeClass }}>
         Security
       </Link>
@@ -90,8 +120,21 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/o/$orgId/funds', params: { orgId: MOCK_IDS.ORG_ID } });
+    // The index is the REVIEW QUEUE, not a dashboard. The brand's job is
+    // deciding on work; a dashboard is what you build when you do not know what
+    // the job is.
+    throw redirect({ to: '/o/$orgId/review', params: { orgId: MOCK_IDS.ORG_ID } });
   },
+});
+
+// ---------------------------------------------------------------------------
+// Brand
+// ---------------------------------------------------------------------------
+
+const reviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/review',
+  component: ReviewScreen,
 });
 
 const fundsRoute = createRoute({
@@ -106,11 +149,14 @@ const membersRoute = createRoute({
   component: MembersScreen,
 });
 
+// ---------------------------------------------------------------------------
+// Account — not org-scoped, because the resource is the caller
+// ---------------------------------------------------------------------------
+
 /**
- * Not org-scoped: the resource is the caller. Matches the API, where these are
- * `access: { kind: 'self' }` and carry no `{orgId}` — putting one in the path
- * would mean authorising the request against something unrelated to what it
- * touches.
+ * Matches the API, where these are `access: { kind: 'self' }` and carry no
+ * `{orgId}`. Putting one in the path would mean authorising the request against
+ * something unrelated to what it touches.
  */
 const securityRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -118,11 +164,48 @@ const securityRoute = createRoute({
   component: SecurityScreen,
 });
 
+// ---------------------------------------------------------------------------
+// Creator — lazily loaded
+// ---------------------------------------------------------------------------
+
+const creatorHomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/me',
+  component: lazyRouteComponent(() => import('./routes/creator/home'), 'CreatorHomeScreen'),
+});
+
+const creatorDealRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/me/deals/$dealId',
+  component: lazyRouteComponent(() => import('./routes/creator/deal'), 'CreatorDealScreen'),
+});
+
+// ---------------------------------------------------------------------------
+// Super admin — lazily loaded
+// ---------------------------------------------------------------------------
+
+/**
+ * In PRODUCTION this belongs on its own origin (`admin.rayi.com`), so an XSS
+ * anywhere in the brand or creator app cannot reach an admin session. It lives
+ * here for now behind a lazy route, which keeps it out of every other visitor's
+ * bundle but does NOT give it origin isolation — that is a deployment change,
+ * and the roadmap says so rather than this comment pretending otherwise.
+ */
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: lazyRouteComponent(() => import('./routes/admin/overview'), 'AdminOverviewScreen'),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  reviewRoute,
   fundsRoute,
   membersRoute,
   securityRoute,
+  creatorHomeRoute,
+  creatorDealRoute,
+  adminRoute,
 ]);
 
 export const router = createRouter({ routeTree });
