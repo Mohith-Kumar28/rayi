@@ -94,7 +94,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [
-        ...AppModule.common().imports,
+        ...(AppModule.common().imports ?? []),
         I18nModule.forRootAsync({
           resolvers: [
             { use: QueryResolver, options: ['lang'] },
@@ -146,7 +146,7 @@ export class AppModule {
   static worker(): DynamicModule {
     return {
       module: AppModule,
-      imports: [...AppModule.common().imports, WorkerModule],
+      imports: [...(AppModule.common().imports ?? []), WorkerModule],
     };
   }
 }

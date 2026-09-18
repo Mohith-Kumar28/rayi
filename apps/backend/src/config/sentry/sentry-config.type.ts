@@ -1,4 +1,4 @@
 export type SentryConfig = {
-  dsn: string;
-  logging: boolean;
+  dsn?: string;
+  logging?: boolean;
 };

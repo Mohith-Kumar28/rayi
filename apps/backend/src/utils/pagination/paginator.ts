@@ -29,7 +29,9 @@ export const paginator = (
   defaultOptions: PaginateOptions,
 ): PaginateFunction => {
   return async (model, args: any = { where: undefined }, options) => {
-    const limit = options?.limit || defaultOptions.limit;
+    // Explicit fallback: an undefined `take` means Prisma returns EVERY row,
+    // which on a large table is an accidental full-table read.
+    const limit = options?.limit ?? defaultOptions.limit ?? 10;
     const offset = options?.offset || defaultOptions.offset || 0;
 
     const [total, data] = await Promise.all([

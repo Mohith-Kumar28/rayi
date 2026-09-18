@@ -126,7 +126,7 @@ describe('HealthController', () => {
         error: {},
       };
 
-      healthCheckServiceValue.check.mockReturnValue(healthCheckResult);
+      healthCheckServiceValue.check?.mockReturnValue(healthCheckResult);
 
       const result = await controller.check();
 

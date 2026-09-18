@@ -31,6 +31,6 @@ export class PageOptionsDto {
   readonly order?: Order = Order.Asc;
 
   get offset() {
-    return this.page ? (this.page - 1) * this.limit : 0;
+    return this.page ? (this.page - 1) * (this.limit ?? DEFAULT_PAGE_LIMIT) : 0;
   }
 }

@@ -1,4 +1,4 @@
 export type GrafanaConfig = {
-  username: string;
-  password: string;
+  username?: string;
+  password?: string;
 };

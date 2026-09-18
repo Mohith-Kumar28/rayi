@@ -1,3 +1,4 @@
+import { requireEnv } from '@/utils/config/require-env';
 import validateConfig from '@/utils/config/validate-config';
 import { registerAs } from '@nestjs/config';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
@@ -27,14 +28,14 @@ class EnvironmentVariablesValidator {
 
 export function getConfig(): AuthConfig {
   return {
-    authSecret: process.env.AUTH_SECRET,
+    authSecret: requireEnv('AUTH_SECRET'),
     basicAuth: {
       username: process.env.BASIC_AUTH_USERNAME,
-      password: process.env.BASIC_AUTH_PASSWORD,
+      password: requireEnv('BASIC_AUTH_PASSWORD'),
     },
     oAuth: {
       github: {
-        clientId: process.env.GITHUB_CLIENT_ID,
+        clientId: process.env.GITHUB_CLIENT_ID ?? '',
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
       },
     },

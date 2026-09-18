@@ -37,7 +37,11 @@ const customReceivedMessage = (req: IncomingMessage) => {
   return `[${req.id || '*'}] "${req.method} ${req.url}"`;
 };
 
-const customErrorMessage = (req, res, err) => {
+const customErrorMessage = (
+  req: IncomingMessage,
+  res: { statusCode: number },
+  err: Error,
+) => {
   return `[${req.id || '*'}] "${req.method} ${req.url}" ${res.statusCode} - "${req.headers['host']}" "${req.headers['user-agent']}" - message: ${err.message}`;
 };
 
@@ -67,8 +71,9 @@ function googleLoggingConfig(): Options {
       level(label, number) {
         return {
           severity:
-            PinoLevelToGoogleLoggingSeverityLookup[label] ||
-            PinoLevelToGoogleLoggingSeverityLookup['info'],
+            PinoLevelToGoogleLoggingSeverityLookup[
+              label as keyof typeof PinoLevelToGoogleLoggingSeverityLookup
+            ] ?? PinoLevelToGoogleLoggingSeverityLookup.info,
           level: number,
         };
       },
@@ -115,7 +120,7 @@ async function useLoggerFactory(
       paths: loggingRedactPaths,
       censor: '**GDPR COMPLIANT**',
     }, // Redact sensitive information
-    ...logServiceConfig(logService),
+    ...logServiceConfig(logService ?? ''),
   };
 
   return {

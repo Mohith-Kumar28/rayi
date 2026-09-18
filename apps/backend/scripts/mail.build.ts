@@ -54,8 +54,10 @@ if (isWatchMode) {
   chokidar
     .watch(templatesDir, {
       ignoreInitial: true,
-      ignored: (path: string, stats: Stats) =>
-        stats?.isFile() && !path.endsWith('.tsx'),
+      // chokidar v4 types `ignored` as a Matcher, whose predicate form receives
+      // `stats` as optional. Annotating it that way matches the signature.
+      ignored: (path: string, stats?: Stats) =>
+        Boolean(stats?.isFile() && !path.endsWith('.tsx')),
     })
     .on('change', (filePath) => {
       if (filePath.endsWith('.tsx')) {

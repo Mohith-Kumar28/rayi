@@ -1,6 +1,6 @@
 export type MailConfig = {
   host?: string;
-  port: number;
+  port?: number;
   user?: string;
   password?: string;
   ignoreTLS: boolean;

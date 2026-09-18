@@ -23,8 +23,8 @@ export function getConfig(): ThrottlerConfig {
   const enabled = process.env.THROTTLER_ENABLED === 'true';
   return {
     enabled: enabled,
-    limit: Number.parseInt(process.env.THROTTLER_LIMIT),
-    ttl: enabled ? seconds(Number.parseInt(process.env.THROTTLER_TTL)) : 0,
+    limit: Number.parseInt(process.env.THROTTLER_LIMIT ?? '100', 10),
+    ttl: enabled ? seconds(Number.parseInt(process.env.THROTTLER_TTL ?? '60', 10)) : 0,
   };
 }
 

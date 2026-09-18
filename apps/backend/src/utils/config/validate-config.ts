@@ -17,7 +17,7 @@ function validateConfig<T extends object>(
       .map(
         (error) =>
           `\nError in ${error.property}:\n` +
-          Object.entries(error.constraints)
+          Object.entries(error.constraints ?? {})
             .map(([key, value]) => `+ ${key}: ${value}`)
             .join('\n'),
       )

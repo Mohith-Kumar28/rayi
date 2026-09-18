@@ -1,4 +1,5 @@
 import { Environment, LogService } from '@/constants/app.constant';
+import { requireEnv } from '@/utils/config/require-env';
 import validateConfig from '@/utils/config/validate-config';
 import { registerAs } from '@nestjs/config';
 import {
@@ -84,17 +85,17 @@ class EnvironmentVariablesValidator {
 }
 
 export function getConfig(): AppConfig {
-  const port = parseInt(process.env.APP_PORT, 10);
+  const port = Number.parseInt(requireEnv('APP_PORT'), 10);
 
   return {
     nodeEnv: (process.env.NODE_ENV || Environment.Development) as Environment,
     isHttps: process.env.IS_HTTPS === 'true',
     isWorker: process.env.IS_WORKER === 'true',
-    name: process.env.APP_NAME,
-    appPrefix: kebabCase(process.env.APP_NAME),
+    name: requireEnv('APP_NAME'),
+    appPrefix: kebabCase(requireEnv('APP_NAME')),
     url: process.env.APP_URL || `http://localhost:${port}`,
     port,
-    workerPort: Number.parseInt(process.env.APP_WORKER_PORT, 10),
+    workerPort: Number.parseInt(process.env.APP_WORKER_PORT ?? '0', 10),
     debug: process.env.APP_DEBUG === 'true',
     fallbackLanguage: process.env.APP_FALLBACK_LANGUAGE || 'en',
     appLogging: process.env.APP_LOGGING === 'true',

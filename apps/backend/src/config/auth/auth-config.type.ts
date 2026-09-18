@@ -1,7 +1,7 @@
 export type AuthConfig = {
   authSecret: string;
   basicAuth: {
-    username: string;
+    username?: string;
     password: string;
   };
   oAuth: {

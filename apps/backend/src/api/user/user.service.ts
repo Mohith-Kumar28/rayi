@@ -79,8 +79,8 @@ export class UserService {
 
     const metaDto = new CursorPaginationDto(
       users.length,
-      hasNext ? newAfterCursor : null,
-      hasPrevious ? newBeforeCursor : null,
+      hasNext ? (newAfterCursor ?? '') : '',
+      hasPrevious ? (newBeforeCursor ?? '') : '',
       reqDto,
     );
 

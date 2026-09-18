@@ -8,11 +8,11 @@ export function IsBothOrNonePresent(
   property: string,
   validationOptions?: ValidationOptions,
 ): PropertyDecorator {
-  return (object: any, propertyName: string) => {
+  return (object: object, propertyName: string | symbol) => {
     registerDecorator({
       name: 'IsBothOrNonePresent',
       target: object.constructor,
-      propertyName: propertyName,
+      propertyName: propertyName as string,
       constraints: [property],
       options: validationOptions,
       validator: {

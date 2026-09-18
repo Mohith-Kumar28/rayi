@@ -1,8 +1,8 @@
 export type AwsConfig = {
-  region: string;
-  accessKey: string;
-  secretKey: string;
-  bucket: string;
+  region?: string;
+  accessKey?: string;
+  secretKey?: string;
+  bucket?: string;
 };
 
 export type AwsS3UploadOptions = {

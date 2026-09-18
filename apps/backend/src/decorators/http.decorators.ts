@@ -69,7 +69,9 @@ export const ApiPublic = (options: IApiPublicOptions = {}): MethodDecorator => {
     Public(),
     ApiOperation({ summary: options?.summary, ...(options?.operations ?? {}) }),
     HttpCode(options.statusCode || defaultStatusCode),
-    isPaginated ? ApiPaginatedResponse(ok) : ApiOkResponse(ok),
+    isPaginated
+      ? ApiPaginatedResponse(ok as Parameters<typeof ApiPaginatedResponse>[0])
+      : ApiOkResponse(ok),
     ...serializers,
     ...errorResponses,
   );
@@ -110,7 +112,7 @@ export const ApiAuth = (options: IApiAuthOptions = {}): MethodDecorator => {
     ApiOperation({ summary: options?.summary, ...(options?.operations ?? {}) }),
     HttpCode(options.statusCode || defaultStatusCode),
     isPaginated
-      ? ApiPaginatedResponse(ok)
+      ? ApiPaginatedResponse(ok as Parameters<typeof ApiPaginatedResponse>[0])
       : options.statusCode === 201
         ? ApiCreatedResponse(ok)
         : ApiOkResponse(ok),

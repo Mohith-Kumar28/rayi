@@ -25,12 +25,18 @@ export function ValidateDto(
       }
       const dtoObject = plainToInstance(dtoClass, arg);
       const errors = await validate(
-        options?.property ? dtoObject?.[options?.property] : dtoObject,
+        options?.property
+          ? (dtoObject as unknown as Record<string, object>)[options.property]
+          : dtoObject,
       );
 
       if (errors.length > 0) {
         throw new BadRequestException(
-          errors.map((error) => Object.values(error.constraints)).join(', '),
+          // `constraints` is undefined for nested validation errors, so the
+          // inherited code threw while reporting a validation failure.
+          errors
+            .map((error) => Object.values(error.constraints ?? {}))
+            .join(', '),
         );
       }
 

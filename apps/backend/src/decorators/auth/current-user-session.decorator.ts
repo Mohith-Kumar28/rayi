@@ -20,6 +20,8 @@ export const CurrentUserSession = createParamDecorator(
           ...request,
           headers: request?.headers,
         }
-      : request.session?.[data];
+      : ((request.session as Record<string, unknown> | undefined)?.[
+          data
+        ] as CurrentUserSession);
   },
 );

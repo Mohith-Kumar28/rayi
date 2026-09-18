@@ -31,6 +31,10 @@ export class CacheService {
   ): Promise<number | null> {
     const ttl = await this.cacheManager.ttl(this._constructCacheKey(keyParams));
 
+    // cacheManager.ttl() can resolve undefined when the key is absent; -1/-2 are
+    // Redis' "no expiry" and "no key" sentinels, and both mean "no TTL" here.
+    if (ttl === undefined) return null;
+
     if (!options?.disableResponseFilter && [-1, -2].includes(ttl)) {
       return null;
     }
@@ -48,7 +52,7 @@ export class CacheService {
     },
   ): Promise<{ key: string }> {
     const key = this._constructCacheKey(keyParams);
-    await this.cacheManager.set(key, value, options?.ttl);
+    await this.cacheManager.set(key, value, options?.ttl ?? 0);
     return { key };
   }
 

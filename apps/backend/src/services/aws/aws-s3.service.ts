@@ -18,13 +18,17 @@ export class AwsS3Service {
   private s3Client: S3Client;
 
   constructor(private readonly configService: ConfigService<GlobalConfig>) {
+    // AWS config is entirely optional (every field is @IsOptional), so these
+    // can legitimately be undefined when S3 is not in use. Defaulting to empty
+    // strings keeps the client constructible; a real upload then fails loudly at
+    // call time rather than crashing the whole process at boot.
     this.s3Client = new S3Client({
-      region: this.configService.get('aws.region', { infer: true }),
+      region: this.configService.get('aws.region', { infer: true }) ?? '',
       credentials: {
-        accessKeyId: this.configService.get('aws.accessKey', { infer: true }),
-        secretAccessKey: this.configService.get('aws.secretKey', {
-          infer: true,
-        }),
+        accessKeyId:
+          this.configService.get('aws.accessKey', { infer: true }) ?? '',
+        secretAccessKey:
+          this.configService.get('aws.secretKey', { infer: true }) ?? '',
       },
     });
   }
@@ -38,6 +42,9 @@ export class AwsS3Service {
     file: File,
     config: AwsS3UploadOptions,
   ): Promise<AwsS3UploadResponse> {
+    if (!file.buffer) {
+      throw new Error('Cannot upload a file with no buffer.');
+    }
     const response = await this.uploadBuffer(file.buffer, config);
     return {
       ...response,

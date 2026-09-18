@@ -2,7 +2,7 @@ import { registerDecorator, type ValidationOptions } from 'class-validator';
 import ms from 'ms';
 
 export function IsMs(validationOptions?: ValidationOptions): PropertyDecorator {
-  return (object: object, propertyName: string) => {
+  return (object: object, propertyName: string | symbol) => {
     registerDecorator({
       propertyName: propertyName as string,
       name: 'isMs',
