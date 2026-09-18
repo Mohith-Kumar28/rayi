@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ResendWebhookController } from './resend-webhook.controller';
+import { StripeWebhookController } from './stripe-webhook.controller';
 import { WebhookIngestModule } from './webhook-ingest.module';
 
 /**
@@ -16,6 +17,6 @@ import { WebhookIngestModule } from './webhook-ingest.module';
  */
 @Module({
   imports: [WebhookIngestModule],
-  controllers: [ResendWebhookController],
+  controllers: [ResendWebhookController, StripeWebhookController],
 })
 export class WebhooksModule {}

@@ -130,6 +130,22 @@ Organization  (a company — owns the funding balance and the Stripe relationshi
 
 ---
 
+## Identity and authorization, settled while building step 6
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **TOTP implemented, not depended on** | Locked | Better Auth's `verifyTOTP` is a sign-in endpoint — it establishes a session, which is the wrong effect for "confirm you are still you" and makes a step-up indistinguishable from a login in the audit trail. Writing it is defensible because RFC 6238 publishes test vectors: it is checked against Appendix B for SHA-1, SHA-256 and SHA-512 |
+| **A step-up grant is bound to a PURPOSE and a RESOURCE** | Locked | A grant that says only "this user confirmed something" is a bearer capability — confirm a harmless action, spend it on a dangerous one. That is the bulk-approve hole, generalised |
+| **Consumed with ONE conditional `updateMany`** | Locked | Check-then-spend leaves a window between the check and the spend, and that window is the whole vulnerability. A test races three consumes and asserts exactly one wins |
+| **Enrolment writes to a separate table until confirmed** | Locked | Writing straight to the live table means a mis-scanned QR or a wrong phone clock locks a user out of the account they were trying to secure, with no way back |
+| **Better Auth's `ac` is left UNSET, not generated** | Locked (changed from the plan) | The plan said generate it from `role_permission`. Having blocked `/organization/*` at the mount, that model governs nothing — and a synchronised second evaluator still answers questions independently. Two authorities drift, and the drift surfaces when one allows what the other refuses |
+| **A role ceiling on invitations and role changes** | Locked | Better Auth's docs: "there's no built-in restriction preventing an admin from inviting someone as owner." Self-promotion is refused outright even for owners |
+| **A downgrade revokes sessions and money authority** | Locked | A role taken away that leaves a live session is a role still held, for as long as that session lasts |
+| **`rayi_app` connects without SUPERUSER or BYPASSRLS** | Locked | Both bypass every RLS policy unconditionally, and `FORCE ROW LEVEL SECURITY` does not help — it subjects the table owner, not a superuser. Without this the policies are decorative |
+| **Cross-tenant access is an explicit named call**, not `BYPASSRLS` | Locked | Granting the role a bypass would make every policy decorative. `crossTenant(reason)` is greppable, appears in the code using it, and logs every call |
+
+---
+
 ## Open questions
 
 - **Does deliverable approval require `MoneyAuthority`?** Approving a deliverable deterministically

@@ -1,4 +1,11 @@
-import { decodeBase32, DEFAULT_PERIOD, generateAt, verifyTotp } from './totp';
+import {
+  decodeBase32,
+  DEFAULT_PERIOD,
+  encodeBase32,
+  generateAt,
+  otpauthUri,
+  verifyTotp,
+} from './totp';
 
 /**
  * Checked against RFC 6238's OWN test vectors.
@@ -220,5 +227,68 @@ describe('base32 decoding', () => {
   it('returns null for an empty secret', () => {
     expect(decodeBase32('')).toBeNull();
     expect(decodeBase32('   ')).toBeNull();
+  });
+});
+
+describe('base32 encoding', () => {
+  it('round-trips through decoding', () => {
+    for (const length of [1, 5, 10, 16, 20, 32, 64]) {
+      const bytes = Buffer.alloc(length, 0xab);
+      expect(decodeBase32(encodeBase32(bytes))?.equals(bytes)).toBe(true);
+    }
+  });
+
+  it('round-trips random secrets, which is how they are actually generated', () => {
+    for (let i = 0; i < 50; i += 1) {
+      const bytes = Buffer.from(
+        Array.from({ length: 20 }, () => Math.floor(Math.random() * 256)),
+      );
+      expect(decodeBase32(encodeBase32(bytes))?.equals(bytes)).toBe(true);
+    }
+  });
+
+  it('emits no padding', () => {
+    // A trailing `=` in a QR code is a common source of "it says invalid".
+    expect(encodeBase32(Buffer.from('Hello!', 'ascii'))).not.toContain('=');
+  });
+
+  it('produces a secret that a generated code verifies against', () => {
+    // The real end-to-end property: encode a secret, hand it to the verifier as
+    // a string, and have a code generated from the raw bytes accept.
+    const bytes = Buffer.from('12345678901234567890', 'ascii');
+    const secret = encodeBase32(bytes);
+    const now = 1_700_000_000;
+    const code = generateAt(bytes, Math.floor(now / DEFAULT_PERIOD));
+
+    expect(verifyTotp({ secret, code, options: { now: new Date(now * 1000) } })).toBe(true);
+  });
+});
+
+describe('the otpauth URI', () => {
+  it('carries the issuer in BOTH places', () => {
+    // Different apps read different ones, and an app that reads neither shows a
+    // bare email with no indication of which service it belongs to.
+    const uri = otpauthUri({ secret: 'ABCDEF', account: 'jordan@acme.com', issuer: 'Rayi' });
+    expect(uri).toContain('otpauth://totp/Rayi:');
+    expect(uri).toContain('issuer=Rayi');
+  });
+
+  it('URI-encodes the account, so a + or a space cannot break the label', () => {
+    const uri = otpauthUri({
+      secret: 'ABCDEF',
+      account: 'jordan+work@acme.com',
+      issuer: 'Rayi Payments',
+    });
+    expect(uri).toContain('jordan%2Bwork%40acme.com');
+    expect(uri).toContain('Rayi%20Payments:');
+  });
+
+  it('declares the parameters the verifier actually uses', () => {
+    // An app configured for 8 digits or a 60-second period produces codes this
+    // server will never accept, and the user has no way to see why.
+    const uri = otpauthUri({ secret: 'ABCDEF', account: 'a@b.com', issuer: 'Rayi' });
+    expect(uri).toContain('digits=6');
+    expect(uri).toContain('period=30');
+    expect(uri).toContain('algorithm=SHA1');
   });
 });

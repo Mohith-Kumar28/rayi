@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '@/database/prisma.module';
 
+import { AccessControlAssertion } from './access-control.assertion';
 import { PermissionService } from './permission.service';
 
 /**
@@ -13,7 +14,7 @@ import { PermissionService } from './permission.service';
  */
 @Module({
   imports: [PrismaModule],
-  providers: [PermissionService],
+  providers: [PermissionService, AccessControlAssertion],
   exports: [PermissionService],
 })
 export class AuthorizationModule {}

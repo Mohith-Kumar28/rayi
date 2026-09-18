@@ -18,7 +18,7 @@ can pick up without re-deriving anything.
 
 **Where the build is: steps 1–7 done, 8–16 to go.** The vertical slice is complete — a real HTTP
 request becomes a `treasury_command` row, and a worker picks it up and posts a balanced ledger entry,
-with no Stripe and no external money rail involved. 549 tests pass, 198 of them against a real
+with no Stripe and no external money rail involved. 591 tests pass, 224 of them against a real
 Postgres. Start at [Roadmap](06-roadmap.md) to see exactly what is and is not built.
 
 ## The shortest possible summary
@@ -69,6 +69,12 @@ Each of these cost real investigation. They are written up in full in the docs a
 - **`class-transformer` turns the string `'false'` into boolean `true`** under
   `enableImplicitConversion`. This defeated the Stripe worker-only key check for the exact value
   `.env.example` ships.
+- **Stripe and Svix sign differently.** Svix strips `whsec_` and base64-decodes the key and signs
+  `{id}.{timestamp}.{body}` in base64; Stripe uses the secret as-is and signs `{timestamp}.{body}` in
+  hex. Unifying them fails closed and looks like an attack.
+- **A superuser or `BYPASSRLS` role bypasses every row-level security policy**, and
+  `FORCE ROW LEVEL SECURITY` does not change that — it only subjects the table *owner*. RLS written
+  and tested on a superuser connection is inert and looks fine.
 - **No log can prove from inside itself that it has not been truncated.** The hash chain catches an
   interior deletion; only an externally-published head catches a deleted tail.
 

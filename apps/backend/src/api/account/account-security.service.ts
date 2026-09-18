@@ -4,11 +4,12 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 import { AuditService } from '@/audit/audit.service';
 import { AuditAction } from '@/audit/audit.types';
 import { StepUpPurpose, StepUpService } from '@/auth/step-up/step-up.service';
+import { encodeBase32, otpauthUri, verifyTotp } from '@/auth/step-up/totp';
 import type { RequestContext } from '@/common/types/request-context.type';
 import { PrismaService } from '@/database/prisma.service';
 
@@ -23,6 +24,22 @@ import { PrismaService } from '@/database/prisma.service';
 
 /** How long a confirmation link lives. Long enough to find the email, short enough to matter. */
 const EMAIL_CHANGE_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * How long an unconfirmed enrolment survives.
+ *
+ * Long enough to install an authenticator app mid-flow, short enough that an
+ * abandoned secret does not sit around indefinitely.
+ */
+const ENROLMENT_TTL_MS = 15 * 60 * 1000;
+
+/** Wrong codes allowed against one enrolment before it is thrown away. */
+const ENROLMENT_MAX_ATTEMPTS = 10;
+
+/** RFC 4226 recommends at least 128 bits; 160 is what every authenticator expects. */
+const SECRET_BYTES = 20;
+
+const BACKUP_CODE_COUNT = 10;
 
 @Injectable()
 export class AccountSecurityService {
@@ -301,4 +318,154 @@ export class AccountSecurityService {
 
     this.logger.warn(`Two-factor removed for ${input.userId}.`);
   }
+
+  /**
+   * Starts enrolling a second factor.
+   *
+   * Writes to a SEPARATE table, not the live one. If enrolment wrote straight to
+   * `TwoFactor`, a user who scanned the QR into the wrong entry — or whose phone
+   * clock is wrong — would be locked out of their own account by the act of
+   * trying to secure it, with no way back in.
+   *
+   * Replacing an EXISTING factor needs a code from the current one, because
+   * swapping a factor is exactly as sensitive as removing one: an attacker with
+   * a session would otherwise enrol their own and own the account.
+   */
+  async beginTwoFactorEnrolment(input: {
+    userId: string;
+    issuer: string;
+    /** Required only when a factor already exists. */
+    currentCode?: string | undefined;
+    context: RequestContext;
+  }): Promise<{ secret: string; otpauthUri: string; expiresAt: Date }> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: input.userId },
+      select: { email: true },
+    });
+
+    const existing = await this.prisma.twoFactor.findFirst({
+      where: { userId: input.userId, deletedAt: null, secret: { not: null } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      if (!input.currentCode) throw new ForbiddenException('Confirm with your current code first.');
+      await this.stepUp.mint({
+        userId: input.userId,
+        purpose: StepUpPurpose.EnableTwoFactor,
+        code: input.currentCode,
+        ipAddress: input.context.ipAddress,
+        userAgent: input.context.userAgent,
+      });
+      await this.stepUp.consume({
+        userId: input.userId,
+        purpose: StepUpPurpose.EnableTwoFactor,
+      });
+    }
+
+    const secret = encodeBase32(randomBytes(SECRET_BYTES));
+    const expiresAt = new Date(Date.now() + ENROLMENT_TTL_MS);
+
+    // One live enrolment per user. Starting again replaces the previous secret
+    // rather than leaving two that could each be confirmed.
+    await this.prisma.twoFactorEnrolment.upsert({
+      where: { userId: input.userId },
+      create: { userId: input.userId, secret, expiresAt },
+      update: { secret, expiresAt, attempts: 0 },
+    });
+
+    return {
+      secret,
+      otpauthUri: otpauthUri({ secret, account: user.email, issuer: input.issuer }),
+      expiresAt,
+    };
+  }
+
+  /**
+   * Confirms an enrolment with a code from the newly-scanned secret.
+   *
+   * This is the proof that the factor actually works — that the secret was
+   * transcribed correctly and that the phone's clock agrees with ours. Only now
+   * does it become live.
+   *
+   * Returns backup codes, shown ONCE. A user who loses their phone with no
+   * recovery path has lost the account, and support cannot help without becoming
+   * the account-recovery vulnerability themselves.
+   */
+  async confirmTwoFactorEnrolment(input: {
+    userId: string;
+    code: string;
+    context: RequestContext;
+  }): Promise<{ backupCodes: string[] }> {
+    const enrolment = await this.prisma.twoFactorEnrolment.findFirst({
+      where: { userId: input.userId, expiresAt: { gt: new Date() } },
+    });
+
+    if (!enrolment) {
+      throw new ForbiddenException('Start setting up your authenticator app again.');
+    }
+
+    if (enrolment.attempts >= ENROLMENT_MAX_ATTEMPTS) {
+      await this.prisma.twoFactorEnrolment.deleteMany({ where: { userId: input.userId } });
+      throw new ForbiddenException('Too many incorrect codes. Start again.');
+    }
+
+    if (!verifyTotp({ secret: enrolment.secret, code: input.code })) {
+      await this.prisma.twoFactorEnrolment.update({
+        where: { id: enrolment.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new ForbiddenException('That code did not match. Check the app and try again.');
+    }
+
+    const backupCodes = Array.from({ length: BACKUP_CODE_COUNT }, () => generateBackupCode());
+
+    await this.prisma.$transaction(async (tx) => {
+      // Replacing rather than adding. A user who re-enrols has one factor, not
+      // two — and a stale secret that still verifies is a second key to the
+      // account that nobody is holding on purpose.
+      await tx.twoFactor.deleteMany({ where: { userId: input.userId } });
+      await tx.twoFactorBackupCode.deleteMany({ where: { userId: input.userId } });
+
+      await tx.twoFactor.create({ data: { userId: input.userId, secret: enrolment.secret } });
+      await tx.twoFactorBackupCode.createMany({
+        data: backupCodes.map((code) => ({
+          userId: input.userId,
+          codeHash: createHash('sha256').update(code).digest('hex'),
+        })),
+      });
+      await tx.user.update({ where: { id: input.userId }, data: { twoFactorEnabled: true } });
+      await tx.twoFactorEnrolment.deleteMany({ where: { userId: input.userId } });
+    });
+
+    await this.audit.record({
+      action: AuditAction.TwoFactorEnabled,
+      actorUserId: input.userId,
+      subjectType: 'user',
+      subjectId: input.userId,
+      requestId: input.context.requestId ?? null,
+      ipAddress: input.context.ipAddress ?? null,
+      userAgent: input.context.userAgent ?? null,
+      // The COUNT, never the codes. An audit log holding working recovery codes
+      // is an audit log that is also a credential store.
+      data: { backupCodesIssued: backupCodes.length },
+    });
+
+    return { backupCodes };
+  }
+}
+
+/**
+ * A recovery code: ten crypto-random digits, grouped for transcription.
+ *
+ * `randomInt` rather than `Math.random`, because a predictable recovery code is
+ * a predictable way into every account that holds one.
+ *
+ * Digits rather than letters so there is no 0/O or 1/l to misread when someone
+ * is copying these off a screen under pressure — which is the only circumstance
+ * in which they are ever used.
+ */
+function generateBackupCode(): string {
+  const digits = Array.from({ length: 10 }, () => randomInt(0, 10)).join('');
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }

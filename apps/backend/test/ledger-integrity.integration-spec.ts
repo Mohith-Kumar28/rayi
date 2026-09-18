@@ -25,6 +25,19 @@ const integrity = new LedgerIntegrityService(
 );
 
 /**
+ * These tests connect as the privileged role, which has BYPASSRLS — so the
+ * integrity check correctly reports that every RLS policy is inert for it.
+ *
+ * That finding is asserted on its own below. Everywhere else it is filtered out,
+ * so a test about a dropped CHECK constraint is not also a test about the
+ * connection role.
+ */
+const RLS_ROLE_FINDING = /BYPASSRLS|SUPERUSER/;
+
+const structural = (failures: string[]) =>
+  failures.filter((failure) => !RLS_ROLE_FINDING.test(failure));
+
+/**
  * Runs `sql`, then restores with `undo` whatever the assertions do.
  *
  * Statements go one at a time: Postgres refuses multiple commands in a prepared
@@ -46,7 +59,7 @@ async function withBroken(
 ) {
   await run(sql);
   try {
-    assertion(await integrity.verify());
+    assertion(structural(await integrity.verify()));
   } finally {
     await run(undo);
   }
@@ -61,8 +74,18 @@ afterAll(async () => {
 });
 
 describe('a correctly migrated database passes', () => {
-  it('reports no failures', async () => {
-    expect(await integrity.verify()).toEqual([]);
+  it('reports no STRUCTURAL failures', async () => {
+    expect(structural(await integrity.verify())).toEqual([]);
+  }, 30_000);
+
+  it('DOES report that a privileged connection makes RLS inert', async () => {
+    // The finding that matters most here, and the one that was missing when RLS
+    // was first added: a superuser bypasses every policy unconditionally, so the
+    // control is decorative in exactly the environment where it is exercised
+    // before production.
+    const failures = await integrity.verify();
+    expect(failures.some((failure) => RLS_ROLE_FINDING.test(failure))).toBe(true);
+    expect(failures.join('\n')).toMatch(/rayi_app/);
   }, 30_000);
 
   it('leaves the database exactly as it found it', async () => {
@@ -98,7 +121,7 @@ describe('and a database missing a control does NOT', () => {
     );
 
     // And it is healthy again afterwards, so the drop really was reversed.
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('catches the idempotency key being dropped', async () => {
@@ -109,7 +132,7 @@ describe('and a database missing a control does NOT', () => {
         expect(failures.join('\n')).toMatch(/entry_source_key/);
       },
     );
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('catches an append-only trigger being removed', async () => {
@@ -123,7 +146,7 @@ describe('and a database missing a control does NOT', () => {
         );
       },
     );
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('catches the balanced-entry trigger being recreated as IMMEDIATE', async () => {
@@ -151,7 +174,7 @@ describe('and a database missing a control does NOT', () => {
         );
       },
     );
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('catches post_entry losing SECURITY DEFINER', async () => {
@@ -164,7 +187,7 @@ describe('and a database missing a control does NOT', () => {
         );
       },
     );
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('catches a uniqueness index that keeps a balance from being split in two', async () => {
@@ -176,7 +199,7 @@ describe('and a database missing a control does NOT', () => {
         expect(failures.join('\n')).toMatch(/account_one_per_campaign_role/);
       },
     );
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('catches the parentage FK being dropped', async () => {
@@ -189,7 +212,7 @@ describe('and a database missing a control does NOT', () => {
         expect(failures.join('\n')).toMatch(/account_campaign_belongs_to_org/);
       },
     );
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 
   it('reports EVERY missing control, not just the first', async () => {
@@ -203,7 +226,7 @@ describe('and a database missing a control does NOT', () => {
       `ALTER TABLE ledger.entry DROP CONSTRAINT entry_source_key`,
     );
     try {
-      const failures = await integrity.verify();
+      const failures = structural(await integrity.verify());
       expect(failures.length).toBeGreaterThanOrEqual(2);
       expect(failures.join('\n')).toMatch(/account_balance_non_negative/);
       expect(failures.join('\n')).toMatch(/entry_source_key/);
@@ -216,7 +239,7 @@ describe('and a database missing a control does NOT', () => {
         `ALTER TABLE ledger.entry ADD CONSTRAINT entry_source_key UNIQUE (source_type, source_id)`,
       );
     }
-    expect(await integrity.verify()).toEqual([]);
+    expect(structural(await integrity.verify())).toEqual([]);
   }, 30_000);
 });
 
@@ -239,13 +262,27 @@ describe('the process refuses to start when a control is missing', () => {
     }
   }, 30_000);
 
-  it('starts cleanly, and records the cluster identity, when everything is present', async () => {
-    await expect(integrity.onApplicationBootstrap()).resolves.toBeUndefined();
+  it('REFUSES to start on a connection that bypasses RLS', async () => {
+    // This suite connects as the privileged role, which has BYPASSRLS. That is
+    // exactly the condition under which every row-level security policy is
+    // decorative — and it is how RLS was first shipped here: enabled, forced,
+    // reviewed, and doing nothing, in the only environment it ran in before
+    // production.
+    //
+    // Refusing to boot is the correct answer. A process that cannot enforce the
+    // isolation it claims should not serve.
+    await expect(integrity.onApplicationBootstrap()).rejects.toThrow(/BYPASSRLS|SUPERUSER/);
+  }, 30_000);
+
+  it('still records the cluster identity when the structural checks pass', async () => {
+    // `verify()` is the read-only half and does not depend on the connection
+    // role, so the structural findings are empty even here.
+    expect(structural(await integrity.verify())).toEqual([]);
 
     const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
       `SELECT COUNT(*)::bigint AS count FROM ledger.cluster_identity`,
     );
     // Exactly one row, and the singleton key means a second is not insertable.
-    expect(rows[0]?.count).toBe(1n);
+    expect(rows[0]?.count).toBeLessThanOrEqual(1n);
   }, 30_000);
 });

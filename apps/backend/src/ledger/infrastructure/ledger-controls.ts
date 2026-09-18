@@ -186,3 +186,26 @@ export const EXPECTED_GENERATED_COLUMNS: readonly ExpectedGeneratedColumn[] = [
       'Movement in the account’s own normal direction — every balance reads this. If it stopped being generated, balances could be written by hand.',
   },
 ];
+
+export interface ExpectedPolicy {
+  readonly table: string;
+  readonly guards: string;
+}
+
+/**
+ * Tables whose row-level security must be ON and FORCED.
+ *
+ * Enabled but not forced means the table OWNER bypasses every policy — and in
+ * development the application usually connects as the owner, so the control is
+ * inert in the only environment where it is ever exercised before production.
+ */
+export const EXPECTED_RLS_TABLES: readonly ExpectedPolicy[] = [
+  {
+    table: 'campaign',
+    guards: 'A reporting query that forgets its tenant predicate returns zero rows, not everyone\u2019s campaigns.',
+  },
+  { table: 'workspace', guards: 'Same, for workspaces.' },
+  { table: 'member', guards: 'Membership discloses who has access to an organization.' },
+  { table: 'money_authority', guards: 'Discloses who is trusted with funds.' },
+  { table: 'treasury_command', guards: 'Discloses what money movements have been requested.' },
+];

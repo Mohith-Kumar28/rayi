@@ -43,6 +43,8 @@ model User {
 
     // Created/Updated by relations
     stepUpGrants        StepUpGrant[]
+    twoFactorEnrolment  TwoFactorEnrolment?
+    backupCodes2        TwoFactorBackupCode[]
     emailChangeRequests EmailChangeRequest[]
 
     createdFiles File[] @relation("CreatedFiles")
@@ -630,4 +632,57 @@ model Invitation {
     @@index([organizationId, email])
     @@index([expiresAt])
     @@map("invitation")
+}
+
+/// A second factor part-way through being set up.
+///
+/// Deliberately a SEPARATE table from `TwoFactor`, so the live table only ever
+/// holds factors that have been proven to work. If enrolment wrote straight to
+/// the live table, a user who scanned the QR code into the wrong entry — or
+/// whose phone clock is wrong — would be locked out of their own account by the
+/// act of trying to secure it, with no way back in.
+///
+/// Confirming moves it across. Nothing else does.
+model TwoFactorEnrolment {
+    id     String @id @default(uuid())
+    userId String @unique
+
+    /// Base32, as the authenticator app received it. Not yet live.
+    secret String
+
+    /// Wrong codes on THIS enrolment. Bounded, because an attacker who can start
+    /// an enrolment could otherwise use the confirm endpoint as an oracle for a
+    /// secret they supplied — not useful here, but the bound costs nothing and
+    /// removes the question.
+    attempts Int @default(0)
+
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([expiresAt])
+    @@map("two_factor_enrolment")
+}
+
+/// A single-use recovery code, hashed.
+///
+/// Stored as a hash for the same reason a password is: a database read must not
+/// hand over a way into every account. Shown to the user exactly once, at
+/// enrolment, because that is the only moment we can show them.
+model TwoFactorBackupCode {
+    id     String @id @default(uuid())
+    userId String
+
+    /// SHA-256 of the code. Codes are high-entropy random values, so a plain
+    /// hash is adequate — unlike a password, there is nothing to guess.
+    codeHash String @unique
+
+    usedAt DateTime?
+    createdAt DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId, usedAt])
+    @@map("two_factor_backup_code")
 }

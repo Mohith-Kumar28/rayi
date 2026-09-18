@@ -5,6 +5,7 @@ import { GrafanaConfig } from '@/config/grafana/grafana.type';
 import { MailConfig } from '@/config/mail/mail-config.type';
 import { RedisConfig } from '@/config/redis/redis-config.type';
 import { SentryConfig } from '@/config/sentry/sentry-config.type';
+import { StripeConfig } from '@/config/stripe/stripe-config.type';
 import { ThrottlerConfig } from '@/config/throttler/throttler-config.type';
 import { AppConfig } from './app/app-config.type';
 import { BullConfig } from './bull/bull-config.type';
@@ -20,4 +21,11 @@ export type GlobalConfig = {
   throttler: ThrottlerConfig;
   aws: AwsConfig;
   grafana: GrafanaConfig;
+  /**
+   * Registered in `app.module.ts` since the beginning, but absent from this type
+   * until now — so `config.get('stripe.…')` was a compile error and nothing could
+   * read it. A config namespace nothing can read is a config namespace that is
+   * not doing anything.
+   */
+  stripe: StripeConfig;
 };

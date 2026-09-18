@@ -222,9 +222,64 @@ export const disableTwoFactor = defineOperation({
   errors: ['unauthenticated', 'forbidden', 'validation_failed', 'step_up_required'],
 });
 
+export const BeginTwoFactorEnrolmentBodySchema = z.object({
+  /**
+   * A code from the CURRENT factor. Required only when one already exists —
+   * swapping a factor is exactly as sensitive as removing one, so an attacker
+   * with a session must not be able to enrol their own.
+   */
+  currentCode: z.string().min(6).max(12).optional(),
+});
+
+export const beginTwoFactorEnrolment = defineOperation({
+  operationId: 'beginTwoFactorEnrolment',
+  method: 'post',
+  path: '/v1/me/two-factor/enrol',
+  summary: 'Start setting up an authenticator app',
+  description:
+    'Returns a secret and an otpauth:// URI to render as a QR code. The factor is NOT live yet — ' +
+    'it becomes live only once a code from it is confirmed, so a mis-scanned secret or a wrong ' +
+    'phone clock cannot lock you out of your own account.',
+  tags: ['account'],
+  access: { kind: 'self' },
+  body: BeginTwoFactorEnrolmentBodySchema,
+  successStatus: 200,
+  response: z.object({
+    secret: z.string().describe('Base32, for manual entry when a QR code cannot be scanned.'),
+    otpauthUri: z.string().describe('Render as a QR code. Never log this — it contains the secret.'),
+    expiresAt: z.iso.datetime(),
+  }),
+  errors: ['unauthenticated', 'forbidden', 'validation_failed'],
+});
+
+export const ConfirmTwoFactorEnrolmentBodySchema = z.object({
+  code: z.string().min(6).max(12),
+});
+
+export const confirmTwoFactorEnrolment = defineOperation({
+  operationId: 'confirmTwoFactorEnrolment',
+  method: 'post',
+  path: '/v1/me/two-factor/confirm',
+  summary: 'Confirm your authenticator app works',
+  description:
+    'Proves the secret was transcribed correctly and the clocks agree. Returns recovery codes, ' +
+    'shown ONCE — this is the only moment we can show them, and a user who loses their phone with ' +
+    'no recovery path has lost the account.',
+  tags: ['account'],
+  access: { kind: 'self' },
+  body: ConfirmTwoFactorEnrolmentBodySchema,
+  successStatus: 200,
+  response: z.object({
+    backupCodes: z.array(z.string()).describe('Shown once. Never retrievable again.'),
+  }),
+  errors: ['unauthenticated', 'forbidden', 'validation_failed'],
+});
+
 export const ACCOUNT_SECURITY_OPERATIONS = [
   startStepUp,
   requestEmailChange,
+  beginTwoFactorEnrolment,
+  confirmTwoFactorEnrolment,
   disableTwoFactor,
 ] as const;
 

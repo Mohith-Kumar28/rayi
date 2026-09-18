@@ -10,6 +10,7 @@ import {
   EXPECTED_CONSTRAINTS,
   EXPECTED_FUNCTIONS,
   EXPECTED_GENERATED_COLUMNS,
+  EXPECTED_RLS_TABLES,
   EXPECTED_TRIGGERS,
   EXPECTED_UNIQUE_INDEXES,
 } from './ledger-controls';
@@ -59,7 +60,8 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
       `Ledger integrity verified: ${EXPECTED_CONSTRAINTS.length} constraints, ` +
         `${EXPECTED_TRIGGERS.length} triggers, ${EXPECTED_FUNCTIONS.length} functions, ` +
         `${EXPECTED_UNIQUE_INDEXES.length} unique indexes, ` +
-        `${EXPECTED_GENERATED_COLUMNS.length} generated columns.`,
+        `${EXPECTED_GENERATED_COLUMNS.length} generated columns, ` +
+        `${EXPECTED_RLS_TABLES.length} RLS-protected tables.`,
     );
 
     await this.recordClusterIdentity();
@@ -220,6 +222,57 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
       if (!haveGenerated.has(`${expected.table}:${expected.column}`)) {
         failures.push(
           `COLUMN ${expected.table}.${expected.column} is not GENERATED ALWAYS — ${expected.guards}`,
+        );
+      }
+    }
+
+    // ---- row-level security -----------------------------------------------
+    //
+    // Checked here rather than trusted, because RLS has TWO ways of being
+    // silently inert and both look identical from the application: the table
+    // can have policies but not have them enabled, and the connecting role can
+    // bypass them entirely.
+    //
+    // The second one is how this was first written: development connects as a
+    // superuser, every policy was decorative, and the first environment where it
+    // mattered would have been the first where it had never run.
+    const roles = await this.prisma.$queryRaw<
+      Array<{ rolsuper: boolean; rolbypassrls: boolean; rolname: string }>
+    >`
+      SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user
+    `;
+    const role = roles[0];
+
+    if (role && (role.rolsuper || role.rolbypassrls)) {
+      failures.push(
+        `The connected role "${role.rolname}" ${role.rolsuper ? 'is a SUPERUSER' : 'has BYPASSRLS'}, ` +
+          `so every row-level security policy is inert. Connect as rayi_app, which has neither.`,
+      );
+    }
+
+    const rlsTables = await this.prisma.$queryRaw<
+      Array<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>
+    >`
+      SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+    `;
+    const rlsByTable = new Map(rlsTables.map((row) => [row.relname, row]));
+
+    for (const expected of EXPECTED_RLS_TABLES) {
+      const found = rlsByTable.get(expected.table);
+      if (!found) {
+        failures.push(`MISSING TABLE ${expected.table} — expected row-level security on it.`);
+        continue;
+      }
+      if (!found.relrowsecurity) {
+        failures.push(`ROW LEVEL SECURITY is OFF on ${expected.table} — ${expected.guards}`);
+      } else if (!found.relforcerowsecurity) {
+        // Enabled but not FORCED means the table owner bypasses every policy,
+        // and in development the application usually IS the owner.
+        failures.push(
+          `ROW LEVEL SECURITY on ${expected.table} is not FORCED, so the table owner bypasses it.`,
         );
       }
     }

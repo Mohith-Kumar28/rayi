@@ -176,3 +176,56 @@ export function decodeBase32(input: string): Buffer | null {
 
   return Buffer.from(out);
 }
+
+/**
+ * RFC 4648 base32 encoding, for generating a new secret.
+ *
+ * No padding. Authenticator apps accept unpadded secrets and a trailing `=` in a
+ * QR code is a common source of "it says invalid" support tickets.
+ */
+export function encodeBase32(bytes: Buffer): string {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+
+  if (bits > 0) {
+    out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  }
+
+  return out;
+}
+
+/**
+ * The `otpauth://` URI an authenticator app scans.
+ *
+ * `issuer` appears twice — as a path prefix and as a parameter — because
+ * different apps read different ones, and an app that reads neither shows the
+ * account as a bare email with no indication of which service it belongs to.
+ *
+ * Every component is URI-encoded. An email with a `+` or a display name with a
+ * space silently produces a secret that scans into the wrong entry otherwise.
+ */
+export function otpauthUri(input: {
+  secret: string;
+  account: string;
+  issuer: string;
+}): string {
+  const label = `${encodeURIComponent(input.issuer)}:${encodeURIComponent(input.account)}`;
+  const params = new URLSearchParams({
+    secret: input.secret,
+    issuer: input.issuer,
+    algorithm: 'SHA1',
+    digits: String(DEFAULT_DIGITS),
+    period: String(DEFAULT_PERIOD),
+  });
+  return `otpauth://totp/${label}?${params.toString()}`;
+}

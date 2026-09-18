@@ -460,3 +460,241 @@ describe('removing the second factor', () => {
     expect(events).toHaveLength(1);
   }, 20_000);
 });
+
+describe('enrolling a second factor', () => {
+  function codeFor(secret: string): string {
+    return generateAt(decodeBase32(secret)!, Math.floor(Date.now() / 1000 / DEFAULT_PERIOD));
+  }
+
+  it('does NOT make the factor live until it is confirmed', async () => {
+    // THE reason enrolment writes to a separate table. A user who scans the QR
+    // into the wrong entry — or whose phone clock is wrong — would otherwise be
+    // locked out of their own account by the act of trying to secure it.
+    const user = await makeUser('enrolling', false);
+
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+
+    expect(enrolment.secret).toMatch(/^[A-Z2-7]+$/);
+    expect(enrolment.otpauthUri).toContain('otpauth://totp/Rayi:');
+
+    // Not live.
+    expect(await prisma.twoFactor.count({ where: { userId: user.id } })).toBe(0);
+    const stillOff = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(stillOff.twoFactorEnabled).toBe(false);
+  }, 20_000);
+
+  it('goes live once a code from it verifies', async () => {
+    const user = await makeUser('confirming', false);
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+
+    const result = await security.confirmTwoFactorEnrolment({
+      userId: user.id,
+      code: codeFor(enrolment.secret),
+      context: CONTEXT,
+    });
+
+    expect(result.backupCodes).toHaveLength(10);
+    expect(await prisma.twoFactor.count({ where: { userId: user.id } })).toBe(1);
+    const enabled = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(enabled.twoFactorEnabled).toBe(true);
+    // The pending row is gone, so it cannot be confirmed a second time.
+    expect(await prisma.twoFactorEnrolment.count({ where: { userId: user.id } })).toBe(0);
+  }, 20_000);
+
+  it('refuses a wrong confirmation code and counts the attempt', async () => {
+    const user = await makeUser('wrongconfirm', false);
+    await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+
+    await expect(
+      security.confirmTwoFactorEnrolment({ userId: user.id, code: '000000', context: CONTEXT }),
+    ).rejects.toThrow(/did not match/i);
+
+    const pending = await prisma.twoFactorEnrolment.findFirstOrThrow({
+      where: { userId: user.id },
+    });
+    expect(pending.attempts).toBe(1);
+    expect(await prisma.twoFactor.count({ where: { userId: user.id } })).toBe(0);
+  }, 20_000);
+
+  it('stores backup codes ONLY as hashes', async () => {
+    // A database read must not hand over a way into every account.
+    const user = await makeUser('backupcodes', false);
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+    const { backupCodes } = await security.confirmTwoFactorEnrolment({
+      userId: user.id,
+      code: codeFor(enrolment.secret),
+      context: CONTEXT,
+    });
+
+    const stored = await prisma.twoFactorBackupCode.findMany({ where: { userId: user.id } });
+    expect(stored).toHaveLength(10);
+    for (const code of backupCodes) {
+      expect(JSON.stringify(stored)).not.toContain(code);
+      expect(stored.some((row) => row.codeHash === createHash('sha256').update(code).digest('hex'))).toBe(
+        true,
+      );
+    }
+  }, 20_000);
+
+  it('never puts the codes in the audit log', async () => {
+    // An audit log holding working recovery codes is also a credential store.
+    const user = await makeUser('auditcodes', false);
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+    const { backupCodes } = await security.confirmTwoFactorEnrolment({
+      userId: user.id,
+      code: codeFor(enrolment.secret),
+      context: CONTEXT,
+    });
+
+    const events = await prisma.$queryRawUnsafe<Array<{ data: Record<string, unknown> }>>(
+      `SELECT data FROM audit.event
+        WHERE actor_user_id = $1 AND action = 'account.two_factor_enabled'`,
+      user.id,
+    );
+    expect(events[0]?.data).toEqual({ backupCodesIssued: 10 });
+    for (const code of backupCodes) {
+      expect(JSON.stringify(events)).not.toContain(code);
+    }
+  }, 20_000);
+
+  it('issues codes that are unpredictable and distinct', async () => {
+    const user = await makeUser('distinct', false);
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+    const { backupCodes } = await security.confirmTwoFactorEnrolment({
+      userId: user.id,
+      code: codeFor(enrolment.secret),
+      context: CONTEXT,
+    });
+
+    expect(new Set(backupCodes).size).toBe(backupCodes.length);
+    for (const code of backupCodes) {
+      // Digits and one separator: nothing that reads 0/O or 1/l ambiguously when
+      // copied off a screen under pressure, which is the only time they are used.
+      expect(code).toMatch(/^\d{5}-\d{5}$/);
+    }
+  }, 20_000);
+
+  it('REPLACING an existing factor needs a code from the CURRENT one', async () => {
+    // Otherwise an attacker with a session enrols their own factor and owns the
+    // account — swapping is exactly as sensitive as removing.
+    const user = await makeUser('replacing');
+
+    await expect(
+      security.beginTwoFactorEnrolment({ userId: user.id, issuer: 'Rayi', context: CONTEXT }),
+    ).rejects.toThrow(/current code/i);
+
+    await expect(
+      security.beginTwoFactorEnrolment({
+        userId: user.id,
+        issuer: 'Rayi',
+        currentCode: '000000',
+        context: CONTEXT,
+      }),
+    ).rejects.toThrow();
+
+    // With the real code it proceeds.
+    await expect(
+      security.beginTwoFactorEnrolment({
+        userId: user.id,
+        issuer: 'Rayi',
+        currentCode: code(),
+        context: CONTEXT,
+      }),
+    ).resolves.toMatchObject({ secret: expect.any(String) });
+  }, 20_000);
+
+  it('replaces rather than adds, so an old secret stops working', async () => {
+    // A stale secret that still verifies is a second key to the account that
+    // nobody is holding on purpose.
+    const user = await makeUser('rotating');
+    const first = await prisma.twoFactor.findFirstOrThrow({ where: { userId: user.id } });
+
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      currentCode: code(),
+      context: CONTEXT,
+    });
+    await security.confirmTwoFactorEnrolment({
+      userId: user.id,
+      code: codeFor(enrolment.secret),
+      context: CONTEXT,
+    });
+
+    const factors = await prisma.twoFactor.findMany({ where: { userId: user.id } });
+    expect(factors).toHaveLength(1);
+    expect(factors[0]?.id).not.toBe(first.id);
+    expect(factors[0]?.secret).toBe(enrolment.secret);
+  }, 20_000);
+
+  it('refuses to confirm an expired enrolment', async () => {
+    const user = await makeUser('expiredenrol', false);
+    const enrolment = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+    await prisma.twoFactorEnrolment.updateMany({
+      where: { userId: user.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    await expect(
+      security.confirmTwoFactorEnrolment({
+        userId: user.id,
+        code: codeFor(enrolment.secret),
+        context: CONTEXT,
+      }),
+    ).rejects.toThrow(/start setting up/i);
+  }, 20_000);
+
+  it('keeps only ONE live enrolment, so a restarted setup replaces the old secret', async () => {
+    const user = await makeUser('restart', false);
+    const first = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+    const second = await security.beginTwoFactorEnrolment({
+      userId: user.id,
+      issuer: 'Rayi',
+      context: CONTEXT,
+    });
+
+    expect(second.secret).not.toBe(first.secret);
+    expect(await prisma.twoFactorEnrolment.count({ where: { userId: user.id } })).toBe(1);
+
+    // The abandoned secret cannot be confirmed.
+    await expect(
+      security.confirmTwoFactorEnrolment({
+        userId: user.id,
+        code: codeFor(first.secret),
+        context: CONTEXT,
+      }),
+    ).rejects.toThrow();
+  }, 20_000);
+});

@@ -8,16 +8,16 @@ until step 16.
 Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
 Better Auth account endpoints that are currently blocked rather than replaced.
 
-Current test count: **549 passing**.
+Current test count: **630 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
 | `@rayi/domain` — Money, pure ledger logic | 36 | no |
-| `@rayi/contracts` — manifest invariants, OpenAPI shape | 40 | no |
+| `@rayi/contracts` — manifest invariants, OpenAPI shape | 44 | no |
 | `@rayi/api-client` — generated client + error envelope | 10 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
-| `@rayi/backend` unit — config, guards, auth allowlist, mail, webhook signatures, **TOTP (RFC 6238 vectors)**, architecture boundaries | 235 | no |
-| `@rayi/backend` integration — ledger, integrity, audit, authorization, treasury, account, **step-up**, **members**, webhooks, HTTP, queue | **198** | **yes** |
+| `@rayi/backend` unit — config, guards, auth allowlist, mail, **two webhook signature schemes**, TOTP (RFC 6238 vectors), architecture boundaries | 274 | no |
+| `@rayi/backend` integration — ledger, integrity, audit, authorization, treasury, account, step-up, members, RLS, **Resend + Stripe webhooks**, HTTP, queue | **236** | **yes** |
 
 Two gates run outside the test suites, both of which fail CI on drift:
 `pnpm verify:openapi` (the spec matches the manifest) and `pnpm verify:auth-surface`
@@ -57,7 +57,7 @@ Bugs found and fixed while doing this — see `05-security.md` for detail:
 rate-limiter bypassable via `X-Forwarded-For`; `DATABASE_URL` effectively optional; config error
 reporting threw while reporting errors; pagination never advertised a next page.
 
-## 🟡 3. Database foundation and the privilege boundary
+## ✅ 3. Database foundation and the privilege boundary
 
 `prisma/migrations/20260918120000_ledger_core/migration.sql` — hand-written, because Prisma cannot
 express deferred constraint triggers, generated columns, `REVOKE`, composite FKs or SECURITY DEFINER
@@ -88,7 +88,45 @@ functions, and every one of those is load-bearing.
 - [x] **Migrations gated on an advisory lock** — Prisma's schema engine already takes
       `pg_advisory_lock(72707369)`, verified by reading the engine binary. What was missing was a
       guard on the two ways that lock is silently lost; `scripts/migrate.ts` refuses both
-- [ ] RLS on org-scoped tables with a `withTenant()` helper
+- [x] **RLS on org-scoped tables** with `TenantScope.withTenant()` / `.crossTenant()`, plus a
+      dedicated `rayi_app` role that the policies actually apply to
+
+### RLS, and an honest account of what it buys
+
+Every tenant query already carries its predicate in the WHERE clause, and the composite foreign keys
+make a cross-org row unrepresentable. This is the third layer, for the case the other two cannot
+cover: a query someone writes LATER that forgets the predicate. Not a malicious developer —
+`findMany({ where: { state: 'live' } })` in a reporting endpoint six months from now, correct-looking
+and reviewed.
+
+RLS does not make that impossible, because it is only a control if the connection carries the tenant,
+and Postgres cannot know which organization a pooled connection is acting for. What changes is the
+**failure mode**: a forgotten `withTenant()` returns ZERO rows rather than everyone's — a visibly
+broken feature instead of a silent leak.
+
+`SET LOCAL` via `set_config`, never a plain `SET`: a plain one outlives the transaction and, on a
+pooled connection, leaks the tenant into whatever runs next. That would be *worse* than no RLS,
+because the next request reads someone else's data while every check passes. Tested, including the
+throwing case.
+
+Cross-tenant work (reconciliation, the super-admin surface, the worker's sweep) goes through an
+explicitly-named `crossTenant(reason)` that logs every call — rather than granting the application
+role `BYPASSRLS`, which would make the policies decorative.
+
+#### The first version was completely inert
+
+The policies were written, enabled and **forced** — and every one of them did nothing, because the
+development connection uses a role with `rolsuper` and `rolbypassrls`. Both bypass RLS
+unconditionally; `FORCE ROW LEVEL SECURITY` subjects the table *owner* to policies but cannot touch a
+superuser.
+
+So the tests would have passed by seeing every row, and the first environment where the control
+mattered would have been the first one where it had never run. Exactly the class of failure this
+project keeps finding: a control that is present, reviewed, and doing nothing.
+
+Fixed three ways: a `rayi_app` role created `NOSUPERUSER NOBYPASSRLS`, the RLS tests connecting **as
+that role** and asserting the premise before relying on it, and the boot assertion refusing to start
+on any connection that bypasses RLS.
 
 ### The boot assertion, and why it is not paranoia
 
@@ -208,6 +246,11 @@ handlers from the generated client.
 - [x] `<Money>` renders from string minor units with a server-supplied exponent
 - [x] `toMinorUnits` / `allocationIdempotencyKey` extracted with 30 unit tests
 
+- [x] **Security screen** (`/me/security`) — sessions with the current one marked, email change,
+      authenticator removal, and the audit trail the user can read about themselves
+- [x] **People screen** (`/o/$orgId/members`) — roles, invitations, and a **"Can move funds" flag**,
+      because capability granted separately from any role is also invisible unless a surface shows it
+
 Still open: review queue, `<StatusPill>`, `<Countdown>`, org switcher. **Nobody has visually reviewed
 the UI** — see technical debt.
 
@@ -236,9 +279,14 @@ the UI** — see technical debt.
 - [x] **Two-factor removal** behind a code from the factor being removed
 - [x] **Invite / role-change / member-removal** as Nest controllers with a role ceiling, step-up,
       audit rows and session + money-authority revocation on downgrade
-- [ ] Generate Better Auth's `ac` object from `role_permission` at boot with an equality assertion
-- [ ] Two-factor **enrolment** (removal is built; enrolment still goes through Better Auth's
-      blocked endpoint, so a user with no factor cannot add one yet)
+- [x] **Two-factor enrolment**, written to a SEPARATE table until a code from it verifies — so a
+      mis-scanned QR or a wrong phone clock cannot lock a user out of the account they were securing.
+      Backup codes are hashed and shown once
+- [x] **One authorization authority.** Better Auth's `ac` model is left unset rather than generated
+      from `role_permission`: its `/organization/*` endpoints are 404'd, so it governs nothing, and a
+      synchronised second evaluator still answers questions independently.
+      `AccessControlAssertion` refuses to boot if one is ever added — including inside a plugin,
+      which is where it would actually appear
 
 ### Step-up: what makes it more than a second prompt
 
@@ -483,7 +531,41 @@ which is the point of having done the lower-stakes provider first.
 - [x] Interpretation split into the **worker**, enforced by dependency-cruiser with a test that
       breaks the rule and asserts it fires
 - [x] Resend bounce and complaint handling, with an email suppression list
-- [ ] Stripe platform + Connect endpoints, two signing secrets, `Stripe-Account` routing
+- [x] **Stripe platform + Connect endpoints**, two signing secrets, `Stripe-Account` recorded at
+      the edge
+
+### Two endpoints, two secrets, and why that is not optional
+
+Connect events — `account.updated`, `payout.paid`, `payout.failed`,
+`transfer.reversed` — arrive on a **separate endpoint with its own signing secret**. Without the
+second endpoint they have no reception path at all: a creator's payout failing, or their payout bank
+details changing, simply never reaches us. Silent, with a three-day fuse, because Stripe retries for
+three days and then stops.
+
+Tested in both directions: a Connect delivery signed with the platform secret is refused, and vice
+versa. Idempotency is on `(source, externalId)` using **Stripe's own event id**, because that is what
+its retries reuse — a generated id would make every retry a new row.
+
+### Stripe's signature scheme is NOT Svix's
+
+Having implemented both, the asymmetry is exactly the kind of thing a well-meaning refactor unifies:
+
+| | Svix (Resend) | Stripe |
+| --- | --- | --- |
+| Key | `whsec_` stripped, remainder **base64-decoded** | the secret **as-is**, prefix included |
+| Signed string | `{id}.{timestamp}.{body}` | `{timestamp}.{body}` |
+| Encoding | base64 | hex |
+
+Three tests assert the schemes do not accept each other's signatures, in both directions. Unifying
+them would fail closed — every delivery rejected, looking like an attack rather than a bug.
+
+`stripe.webhooks.constructEvent` is deliberately not used: it lives on a `Stripe` client built with
+an API key, which the webhook surface does not hold and must not hold. Verification needs only the
+endpoint secret.
+
+**Found while wiring this:** `stripe` was registered in `app.module.ts` from the start but was never
+added to `GlobalConfig`, so `config.get('stripe.…')` was a compile error and nothing could read it. A
+config namespace nothing can read is a config namespace that is not doing anything.
 - [ ] Eight adversarial orderings converging to the same golden ledger fingerprint
 - [ ] WAF managed rules in Count mode for two weeks with a Stripe-IP allow rule ahead of them
 
@@ -597,4 +679,5 @@ while Stripe has moved on.
       claims are atomic, leases expire after 5 minutes so a dead worker's command is reclaimed, and
       `attempts` is capped at 5 so a poison command stops being retried instead of becoming a hot loop
 - [ ] The seed script creates an admin with a password, which no longer signs anyone in
-- [ ] The console has no UI for the account routes (`/v1/me/*`) — the API exists, nothing calls it
+- [ ] Nobody has visually reviewed the new console screens either
+- [ ] The console bundle is now 659 KB — the creator path on 4G needs its own entry point

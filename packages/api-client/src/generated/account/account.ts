@@ -25,6 +25,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  BeginTwoFactorEnrolment200,
+  BeginTwoFactorEnrolmentBody,
+  ConfirmTwoFactorEnrolment200,
+  ConfirmTwoFactorEnrolmentBody,
   DisableTwoFactor200,
   DisableTwoFactorBody,
   ListMyActivity200,
@@ -546,6 +550,134 @@ export const useRequestEmailChange = <TError = Problem,
       > => {
 
       const mutationOptions = getRequestEmailChangeMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Returns a secret and an otpauth:// URI to render as a QR code. The factor is NOT live yet — it becomes live only once a code from it is confirmed, so a mis-scanned secret or a wrong phone clock cannot lock you out of your own account.
+ * @summary Start setting up an authenticator app
+ */
+export const beginTwoFactorEnrolment = (
+    beginTwoFactorEnrolmentBody: BeginTwoFactorEnrolmentBody,
+ ) => {
+      
+      
+      return rayiFetch<BeginTwoFactorEnrolment200>(
+      {url: `/v1/me/two-factor/enrol`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: beginTwoFactorEnrolmentBody
+    },
+      );
+    }
+  
+
+
+export const getBeginTwoFactorEnrolmentMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginTwoFactorEnrolment>>, TError,{data: BeginTwoFactorEnrolmentBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof beginTwoFactorEnrolment>>, TError,{data: BeginTwoFactorEnrolmentBody}, TContext> => {
+
+const mutationKey = ['beginTwoFactorEnrolment'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof beginTwoFactorEnrolment>>, {data: BeginTwoFactorEnrolmentBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  beginTwoFactorEnrolment(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BeginTwoFactorEnrolmentMutationResult = NonNullable<Awaited<ReturnType<typeof beginTwoFactorEnrolment>>>
+    export type BeginTwoFactorEnrolmentMutationBody = BeginTwoFactorEnrolmentBody
+    export type BeginTwoFactorEnrolmentMutationError = Problem
+
+    /**
+ * @summary Start setting up an authenticator app
+ */
+export const useBeginTwoFactorEnrolment = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginTwoFactorEnrolment>>, TError,{data: BeginTwoFactorEnrolmentBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof beginTwoFactorEnrolment>>,
+        TError,
+        {data: BeginTwoFactorEnrolmentBody},
+        TContext
+      > => {
+
+      const mutationOptions = getBeginTwoFactorEnrolmentMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Proves the secret was transcribed correctly and the clocks agree. Returns recovery codes, shown ONCE — this is the only moment we can show them, and a user who loses their phone with no recovery path has lost the account.
+ * @summary Confirm your authenticator app works
+ */
+export const confirmTwoFactorEnrolment = (
+    confirmTwoFactorEnrolmentBody: ConfirmTwoFactorEnrolmentBody,
+ ) => {
+      
+      
+      return rayiFetch<ConfirmTwoFactorEnrolment200>(
+      {url: `/v1/me/two-factor/confirm`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: confirmTwoFactorEnrolmentBody
+    },
+      );
+    }
+  
+
+
+export const getConfirmTwoFactorEnrolmentMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmTwoFactorEnrolment>>, TError,{data: ConfirmTwoFactorEnrolmentBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof confirmTwoFactorEnrolment>>, TError,{data: ConfirmTwoFactorEnrolmentBody}, TContext> => {
+
+const mutationKey = ['confirmTwoFactorEnrolment'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmTwoFactorEnrolment>>, {data: ConfirmTwoFactorEnrolmentBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmTwoFactorEnrolment(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmTwoFactorEnrolmentMutationResult = NonNullable<Awaited<ReturnType<typeof confirmTwoFactorEnrolment>>>
+    export type ConfirmTwoFactorEnrolmentMutationBody = ConfirmTwoFactorEnrolmentBody
+    export type ConfirmTwoFactorEnrolmentMutationError = Problem
+
+    /**
+ * @summary Confirm your authenticator app works
+ */
+export const useConfirmTwoFactorEnrolment = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmTwoFactorEnrolment>>, TError,{data: ConfirmTwoFactorEnrolmentBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof confirmTwoFactorEnrolment>>,
+        TError,
+        {data: ConfirmTwoFactorEnrolmentBody},
+        TContext
+      > => {
+
+      const mutationOptions = getConfirmTwoFactorEnrolmentMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

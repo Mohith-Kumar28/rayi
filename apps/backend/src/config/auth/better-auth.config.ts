@@ -48,6 +48,19 @@ export function getConfig({
     twoFactor(),
   ];
 
+  /*
+   * NO `ac`, NO `roles`, NO `dynamicAccessControl` — deliberately.
+   *
+   * Better Auth ships its own access-control model. Configuring it would create
+   * a SECOND authority on who can do what: one that `PermissionGuard` never
+   * consults and no test covers. Two authorities do not stay in agreement; they
+   * drift, and the drift surfaces when one allows what the other would refuse.
+   *
+   * Its `/organization/*` endpoints are 404'd at the mount, so that model would
+   * govern nothing anyway. `AccessControlAssertion` refuses to boot if one is
+   * ever added, so this comment cannot quietly become untrue.
+   */
+
   // Plugins for development only
   const nonProdPlugins = [openAPI()];
   if (appConfig.nodeEnv !== 'production') {

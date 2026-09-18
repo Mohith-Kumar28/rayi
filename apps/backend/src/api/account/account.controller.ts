@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import {
   type AuditEventSchema,
+  type BeginTwoFactorEnrolmentBodySchema,
+  type ConfirmTwoFactorEnrolmentBodySchema,
   type DisableTwoFactorBodySchema,
   type RequestEmailChangeBodySchema,
   type SessionSummarySchema,
@@ -53,6 +55,8 @@ type RevokeParams = z.infer<
 type StartStepUpBody = z.infer<typeof StartStepUpBodySchema>;
 type RequestEmailChangeBody = z.infer<typeof RequestEmailChangeBodySchema>;
 type DisableTwoFactorBody = z.infer<typeof DisableTwoFactorBodySchema>;
+type BeginEnrolmentBody = z.infer<typeof BeginTwoFactorEnrolmentBodySchema>;
+type ConfirmEnrolmentBody = z.infer<typeof ConfirmTwoFactorEnrolmentBodySchema>;
 
 /**
  * `FastifyRequest.session` is declaration-merged in `src/types/fastify.d.ts` to
@@ -207,6 +211,43 @@ export class AccountController {
     // 202: the change has been RECORDED, not applied. Saying anything stronger
     // would be the UI asserting a fact that depends on an email arriving.
     return { status: 'pending_confirmation' };
+  }
+
+  @Operation('beginTwoFactorEnrolment')
+  async beginTwoFactorEnrolment(
+    @ValidatedBody() body: BeginEnrolmentBody,
+    @Req() request: SessionedRequest,
+  ): Promise<{ secret: string; otpauthUri: string; expiresAt: string }> {
+    const { userId } = this.caller(request);
+
+    const enrolment = await this.security.beginTwoFactorEnrolment({
+      userId,
+      // The issuer is what the authenticator app shows beside the code, so it
+      // comes from OUR config and never from the request — a client-supplied
+      // issuer would let a phishing page produce an entry that looks like ours.
+      issuer: this.config.getOrThrow('app.name', { infer: true }),
+      currentCode: body.currentCode,
+      context: this.context(request),
+    });
+
+    return {
+      secret: enrolment.secret,
+      otpauthUri: enrolment.otpauthUri,
+      expiresAt: enrolment.expiresAt.toISOString(),
+    };
+  }
+
+  @Operation('confirmTwoFactorEnrolment')
+  async confirmTwoFactorEnrolment(
+    @ValidatedBody() body: ConfirmEnrolmentBody,
+    @Req() request: SessionedRequest,
+  ): Promise<{ backupCodes: string[] }> {
+    const { userId } = this.caller(request);
+    return this.security.confirmTwoFactorEnrolment({
+      userId,
+      code: body.code,
+      context: this.context(request),
+    });
   }
 
   @Operation('disableTwoFactor')
