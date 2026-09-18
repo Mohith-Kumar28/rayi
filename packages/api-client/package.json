@@ -9,8 +9,8 @@
       "default": "./src/index.ts"
     },
     "./mocks": {
-      "types": "./src/mocks.ts",
-      "default": "./src/mocks.ts"
+      "types": "./src/mocks/index.ts",
+      "default": "./src/mocks/index.ts"
     }
   },
   "scripts": {

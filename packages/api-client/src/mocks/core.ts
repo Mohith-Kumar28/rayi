@@ -35,14 +35,14 @@ declare global {
   var __rayiScenario: MockScenario | undefined;
 }
 
-function scenario(): MockScenario {
+export function scenario(): MockScenario {
   return globalThis.__rayiScenario ?? 'default';
 }
 
-const ORG_ID = '11111111-1111-4111-8111-111111111111';
-const CAMPAIGN_ID = '22222222-2222-4222-8222-222222222222';
+export const ORG_ID = '11111111-1111-4111-8111-111111111111';
+export const CAMPAIGN_ID = '22222222-2222-4222-8222-222222222222';
 
-const usd = (amountMinor: string) => ({ amountMinor, currency: 'USD' as const, exponent: 2 });
+export const usd = (amountMinor: string) => ({ amountMinor, currency: 'USD' as const, exponent: 2 });
 
 /** $412,500.00 available, $50,000 still clearing, $9,800 pending, $137,250.50 allocated. */
 const FUNDS = {
@@ -129,7 +129,7 @@ const CAMPAIGNS = {
   ],
 };
 
-function problem(init: Omit<Problem, 'type' | 'requestId'> & { type?: string }): Problem {
+export function problem(init: Omit<Problem, 'type' | 'requestId'> & { type?: string }): Problem {
   return {
     type: init.type ?? 'about:blank',
     requestId: 'req_mock_0000000000',
@@ -137,7 +137,7 @@ function problem(init: Omit<Problem, 'type' | 'requestId'> & { type?: string }):
   } as Problem;
 }
 
-const PROBLEMS: Record<string, Problem> = {
+export const PROBLEMS: Record<string, Problem> = {
   'insufficient-funds': problem({
     title: 'Not enough available funds',
     status: 409,
@@ -169,8 +169,8 @@ const PROBLEMS: Record<string, Problem> = {
 // Review queue
 // ---------------------------------------------------------------------------
 
-const DEAL_ID = '66666666-6666-4666-8666-666666666661';
-const DEAL_ID_2 = '66666666-6666-4666-8666-666666666662';
+export const DEAL_ID = '66666666-6666-4666-8666-666666666661';
+export const DEAL_ID_2 = '66666666-6666-4666-8666-666666666662';
 
 /**
  * A check result, with `label` and `tier` taken from the real catalogue rather
@@ -616,7 +616,7 @@ const LEDGER_HEALTHY = {
   failedCommands: 0,
 };
 
-export const handlers = [
+export const coreHandlers = [
   http.get('*/api/v1/orgs/:orgId/funds', async () => {
     await delay(220);
     return HttpResponse.json(scenario() === 'empty' ? EMPTY_FUNDS : FUNDS);
@@ -864,14 +864,4 @@ export const handlers = [
     return HttpResponse.json(LEDGER_HEALTHY);
   }),
 
-];
-
-export const MOCK_IDS = { ORG_ID, CAMPAIGN_ID };
-export const MOCK_SCENARIOS: MockScenario[] = [
-  'default',
-  'insufficient-funds',
-  'step-up-required',
-  'idempotency-conflict',
-  'ledger-drift',
-  'empty',
 ];

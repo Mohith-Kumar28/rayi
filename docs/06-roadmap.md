@@ -251,13 +251,33 @@ handlers from the generated client.
 - [x] **People screen** (`/o/$orgId/members`) — roles, invitations, and a **"Can move funds" flag**,
       because capability granted separately from any role is also invisible unless a surface shows it
 - [x] **Review queue** (`/o/$orgId/review`) — the brand index route, and the signature screen
-- [x] **Creator surface** (`/me`, `/me/deals/$dealId`) — lazily loaded
-- [x] **Super admin** (`/admin`) — brands, platform figures, ledger health
-- [ ] Origin isolation for `/admin` — it is lazily loaded but shares an origin, which is a
-      deployment change, not a code one
-- [ ] Deal and campaign authoring: the brand can review work but cannot yet create the deal
-- [ ] `<StatusPill>`, `<Countdown>`, org switcher, public `/@handle` pages
-- [ ] **Nobody has visually reviewed any of these screens**
+- [x] **Campaigns** (`/o/$orgId/campaigns`, `/campaigns/$campaignId`) — create, and the four money
+      figures kept separate: allocated, committed, released, uncommitted
+- [x] **Deals** (`/o/$orgId/deals`, `/deals/$dealId`) — the list with committed-vs-released totals,
+      the detail with frozen milestone amounts, offering under step-up, terminating
+- [x] **Deal authoring** (`/o/$orgId/deals/new`) — milestone builder where **every amount comes from
+      `previewDeal`**, so the client computes no money and the advance disclosure is derived rather
+      than declared. Verified in a browser: a milestone typed as "after 0 videos" still fires it
+- [x] **Creator roster** (`/o/$orgId/creators`, `/creators/$creatorId`) — derived from deals, scoped
+      to this organization, and organised around whether the creator can actually *be paid*
+- [x] **Workspaces** (`/o/$orgId/workspaces`, `/workspaces/$workspaceId`) — the budget envelope as an
+      authorization ceiling, with the exhausted case saying what stops and what keeps running
+- [x] **Settings** (`/o/$orgId/settings`) — name, daily release limit, funding account, and pending
+      invitations as what they are: unclaimed routes into the organization
+- [x] **Creator surface** (`/me`, `/me/deals/$dealId`, `/me/payouts`, `/me/profile`) — lazily loaded.
+      Payouts never promise a weekday; rebinding a destination is treated as a money action
+- [x] **Super admin** (`/admin`, `/admin/brands/$brandId`, `/creators`, `/ops`, `/audit`) — platform
+      figures, brand drill-down, the treasury command inbox, webhook deliveries, and the hash-chained
+      audit log with per-row chain validity
+- [x] `<StatusPill>` — one status vocabulary, where `secured` green means settled and nothing else
+- [x] **Every screen has been opened in a browser and looked at.** 24 routes swept for render errors,
+      empty renders and `undefined`/`NaN` leaking into text; each defect below was found that way
+- [ ] Origin isolation for `/admin` — it now has its own chrome and nav, but still shares an origin.
+      That is a deployment change, not a code one
+- [ ] `<Countdown>` extraction, org switcher, public `/@handle` pages
+- [ ] **No backend for the 31 new operations.** Contracts, generated client, mocks and UI exist;
+      the controllers, services and migrations do not. This is the repo's own "UI first, against
+      mocks" order, but it means these screens are not wired to a database yet
 
 ### The review queue is exceptions plus one bar
 
@@ -819,7 +839,7 @@ while Stripe has moved on.
       without being shipped
 - [ ] 580 KB is still large — the rest is React, TanStack Router and Query. The creator path needs
       its own entry point, not just a lazy route, to avoid the shared shell
-- [ ] Nobody has visually reviewed the console UI
+- [x] ~~Nobody has visually reviewed the console UI~~ — every route has now been opened
 - [ ] `org_lot_to_spend` raises on multiple lots — replace with FIFO consumption in step 11
 - [ ] `expectedAvailableMinor` is compared against the single spendable lot, which equals the org
       available only while there is one lot. Revisit with FIFO.
@@ -828,4 +848,6 @@ while Stripe has moved on.
       `attempts` is capped at 5 so a poison command stops being retried instead of becoming a hot loop
 - [ ] The seed script creates an admin with a password, which no longer signs anyone in
 
-- [ ] The console bundle is now 659 KB — the creator path on 4G needs its own entry point
+- [ ] The console bundle is now 624 KB shared + per-screen chunks of 1–9 KB. Every new screen is
+      lazily loaded, but the creator path still downloads the shared brand bundle on 4G and
+      needs its own Vite entry point

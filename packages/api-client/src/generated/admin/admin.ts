@@ -21,9 +21,18 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  GetBrandDetail200,
   GetLedgerHealth200,
   GetPlatformStats200,
+  ListAuditEvents200,
+  ListAuditEventsParams,
   ListBrands200,
+  ListPlatformCreators200,
+  ListPlatformCreatorsParams,
+  ListTreasuryCommands200,
+  ListTreasuryCommandsParams,
+  ListWebhookDeliveries200,
+  ListWebhookDeliveriesParams,
   Problem
 } from '.././model';
 
@@ -301,6 +310,469 @@ export function useGetLedgerHealth<TData = Awaited<ReturnType<typeof getLedgerHe
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetLedgerHealthQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary One brand, across tenants
+ */
+export const getBrandDetail = (
+    brandId: string,
+ ) => {
+      
+      
+      return rayiFetch<GetBrandDetail200>(
+      {url: `/v1/admin/brands/${brandId}`, method: 'GET'
+    },
+      );
+    }
+  
+
+
+
+export const getGetBrandDetailQueryKey = (brandId?: string,) => {
+    return [
+    `/v1/admin/brands/${brandId}`
+    ] as const;
+    }
+
+    
+export const getGetBrandDetailQueryOptions = <TData = Awaited<ReturnType<typeof getBrandDetail>>, TError = Problem>(brandId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBrandDetail>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBrandDetailQueryKey(brandId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBrandDetail>>> = () => getBrandDetail(brandId, );
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(brandId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBrandDetail>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetBrandDetailQueryResult = NonNullable<Awaited<ReturnType<typeof getBrandDetail>>>
+export type GetBrandDetailQueryError = Problem
+
+
+export function useGetBrandDetail<TData = Awaited<ReturnType<typeof getBrandDetail>>, TError = Problem>(
+ brandId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBrandDetail>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getBrandDetail>>,
+          TError,
+          Awaited<ReturnType<typeof getBrandDetail>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetBrandDetail<TData = Awaited<ReturnType<typeof getBrandDetail>>, TError = Problem>(
+ brandId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBrandDetail>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getBrandDetail>>,
+          TError,
+          Awaited<ReturnType<typeof getBrandDetail>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetBrandDetail<TData = Awaited<ReturnType<typeof getBrandDetail>>, TError = Problem>(
+ brandId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBrandDetail>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary One brand, across tenants
+ */
+
+export function useGetBrandDetail<TData = Awaited<ReturnType<typeof getBrandDetail>>, TError = Problem>(
+ brandId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBrandDetail>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetBrandDetailQueryOptions(brandId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * The population that RECEIVES the money and has the weakest authentication. Payout holds and disabled payouts are surfaced first, because those are what support is actually contacted about.
+ * @summary Every creator on the platform
+ */
+export const listPlatformCreators = (
+    params?: ListPlatformCreatorsParams,
+ ) => {
+      
+      
+      return rayiFetch<ListPlatformCreators200>(
+      {url: `/v1/admin/creators`, method: 'GET',
+        params
+    },
+      );
+    }
+  
+
+
+
+export const getListPlatformCreatorsQueryKey = (params?: ListPlatformCreatorsParams,) => {
+    return [
+    `/v1/admin/creators`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListPlatformCreatorsQueryOptions = <TData = Awaited<ReturnType<typeof listPlatformCreators>>, TError = Problem>(params?: ListPlatformCreatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlatformCreators>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPlatformCreatorsQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlatformCreators>>> = () => listPlatformCreators(params, );
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlatformCreators>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListPlatformCreatorsQueryResult = NonNullable<Awaited<ReturnType<typeof listPlatformCreators>>>
+export type ListPlatformCreatorsQueryError = Problem
+
+
+export function useListPlatformCreators<TData = Awaited<ReturnType<typeof listPlatformCreators>>, TError = Problem>(
+ params: undefined |  ListPlatformCreatorsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlatformCreators>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPlatformCreators>>,
+          TError,
+          Awaited<ReturnType<typeof listPlatformCreators>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPlatformCreators<TData = Awaited<ReturnType<typeof listPlatformCreators>>, TError = Problem>(
+ params?: ListPlatformCreatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlatformCreators>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPlatformCreators>>,
+          TError,
+          Awaited<ReturnType<typeof listPlatformCreators>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPlatformCreators<TData = Awaited<ReturnType<typeof listPlatformCreators>>, TError = Problem>(
+ params?: ListPlatformCreatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlatformCreators>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Every creator on the platform
+ */
+
+export function useListPlatformCreators<TData = Awaited<ReturnType<typeof listPlatformCreators>>, TError = Problem>(
+ params?: ListPlatformCreatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlatformCreators>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListPlatformCreatorsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Failed commands first. A failed command is money work that was requested and did not happen, and every one of them is a person waiting for something.
+ * @summary The treasury command inbox
+ */
+export const listTreasuryCommands = (
+    params?: ListTreasuryCommandsParams,
+ ) => {
+      
+      
+      return rayiFetch<ListTreasuryCommands200>(
+      {url: `/v1/admin/treasury-commands`, method: 'GET',
+        params
+    },
+      );
+    }
+  
+
+
+
+export const getListTreasuryCommandsQueryKey = (params?: ListTreasuryCommandsParams,) => {
+    return [
+    `/v1/admin/treasury-commands`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListTreasuryCommandsQueryOptions = <TData = Awaited<ReturnType<typeof listTreasuryCommands>>, TError = Problem>(params?: ListTreasuryCommandsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTreasuryCommands>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTreasuryCommandsQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTreasuryCommands>>> = () => listTreasuryCommands(params, );
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTreasuryCommands>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListTreasuryCommandsQueryResult = NonNullable<Awaited<ReturnType<typeof listTreasuryCommands>>>
+export type ListTreasuryCommandsQueryError = Problem
+
+
+export function useListTreasuryCommands<TData = Awaited<ReturnType<typeof listTreasuryCommands>>, TError = Problem>(
+ params: undefined |  ListTreasuryCommandsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTreasuryCommands>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTreasuryCommands>>,
+          TError,
+          Awaited<ReturnType<typeof listTreasuryCommands>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListTreasuryCommands<TData = Awaited<ReturnType<typeof listTreasuryCommands>>, TError = Problem>(
+ params?: ListTreasuryCommandsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTreasuryCommands>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTreasuryCommands>>,
+          TError,
+          Awaited<ReturnType<typeof listTreasuryCommands>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListTreasuryCommands<TData = Awaited<ReturnType<typeof listTreasuryCommands>>, TError = Problem>(
+ params?: ListTreasuryCommandsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTreasuryCommands>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The treasury command inbox
+ */
+
+export function useListTreasuryCommands<TData = Awaited<ReturnType<typeof listTreasuryCommands>>, TError = Problem>(
+ params?: ListTreasuryCommandsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTreasuryCommands>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListTreasuryCommandsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * A blocked or unprocessed webhook is a silent money bug with a three-day fuse — the provider retries for that long and then stops, and nothing else announces it.
+ * @summary Recent webhook deliveries
+ */
+export const listWebhookDeliveries = (
+    params?: ListWebhookDeliveriesParams,
+ ) => {
+      
+      
+      return rayiFetch<ListWebhookDeliveries200>(
+      {url: `/v1/admin/webhooks`, method: 'GET',
+        params
+    },
+      );
+    }
+  
+
+
+
+export const getListWebhookDeliveriesQueryKey = (params?: ListWebhookDeliveriesParams,) => {
+    return [
+    `/v1/admin/webhooks`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListWebhookDeliveriesQueryOptions = <TData = Awaited<ReturnType<typeof listWebhookDeliveries>>, TError = Problem>(params?: ListWebhookDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhookDeliveries>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWebhookDeliveriesQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWebhookDeliveries>>> = () => listWebhookDeliveries(params, );
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWebhookDeliveries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWebhookDeliveriesQueryResult = NonNullable<Awaited<ReturnType<typeof listWebhookDeliveries>>>
+export type ListWebhookDeliveriesQueryError = Problem
+
+
+export function useListWebhookDeliveries<TData = Awaited<ReturnType<typeof listWebhookDeliveries>>, TError = Problem>(
+ params: undefined |  ListWebhookDeliveriesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhookDeliveries>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWebhookDeliveries>>,
+          TError,
+          Awaited<ReturnType<typeof listWebhookDeliveries>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWebhookDeliveries<TData = Awaited<ReturnType<typeof listWebhookDeliveries>>, TError = Problem>(
+ params?: ListWebhookDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhookDeliveries>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWebhookDeliveries>>,
+          TError,
+          Awaited<ReturnType<typeof listWebhookDeliveries>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWebhookDeliveries<TData = Awaited<ReturnType<typeof listWebhookDeliveries>>, TError = Problem>(
+ params?: ListWebhookDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhookDeliveries>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Recent webhook deliveries
+ */
+
+export function useListWebhookDeliveries<TData = Awaited<ReturnType<typeof listWebhookDeliveries>>, TError = Problem>(
+ params?: ListWebhookDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhookDeliveries>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWebhookDeliveriesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Append-only and hash-chained. `chainValid` is per row, so a break is located rather than merely counted — and the sequence is deliberately NOT checked for gaps, because identity columns are not gapless and a rolled-back transaction would otherwise alarm on every failure.
+ * @summary The audit log, across tenants
+ */
+export const listAuditEvents = (
+    params?: ListAuditEventsParams,
+ ) => {
+      
+      
+      return rayiFetch<ListAuditEvents200>(
+      {url: `/v1/admin/audit`, method: 'GET',
+        params
+    },
+      );
+    }
+  
+
+
+
+export const getListAuditEventsQueryKey = (params?: ListAuditEventsParams,) => {
+    return [
+    `/v1/admin/audit`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListAuditEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = Problem>(params?: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuditEventsQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAuditEvents>>> = () => listAuditEvents(params, );
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAuditEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAuditEvents>>>
+export type ListAuditEventsQueryError = Problem
+
+
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = Problem>(
+ params: undefined |  ListAuditEventsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditEvents>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = Problem>(
+ params?: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditEvents>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = Problem>(
+ params?: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The audit log, across tenants
+ */
+
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = Problem>(
+ params?: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAuditEventsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

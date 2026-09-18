@@ -133,4 +133,237 @@ export const getLedgerHealth = defineOperation({
   errors: ['unauthenticated', 'forbidden'],
 });
 
-export const ADMIN_OPERATIONS = [listBrands, getPlatformStats, getLedgerHealth] as const;
+
+// ---------------------------------------------------------------------------
+// Operational surfaces
+//
+// Everything below is READ-ONLY, like everything above it. An admin surface
+// that can also act is a single session that can move any brand's money, and
+// nothing here yet needs that. When one eventually does, it gets its own
+// permission and its own step-up rather than being folded into `platform:read`.
+// ---------------------------------------------------------------------------
+
+export const BrandDetailSchema = BrandSummarySchema.extend({
+  frozen: z.boolean(),
+  bankAccountStatus: z.enum(['none', 'pending_verification', 'verified', 'blocked']),
+  /**
+   * Ledger figures for ONE brand, from the worker-computed snapshot.
+   *
+   * Never read live: `rayi_api` has no grants on the ledger schema at all, so a
+   * balance read here would fail in production while passing in development as
+   * a superuser — the worst kind of difference, because it only appears once
+   * real money is behind it.
+   */
+  funded: MoneySchema,
+  allocated: MoneySchema,
+  released: MoneySchema,
+  computedAt: z.iso.datetime().nullable(),
+  workspaces: z.array(
+    z.object({ workspaceId: z.uuid(), name: z.string(), campaignCount: z.int() }),
+  ),
+  owners: z.array(z.object({ email: z.email(), role: z.string() })),
+});
+
+export const getBrandDetail = defineOperation({
+  operationId: 'getBrandDetail',
+  method: 'get',
+  /**
+   * `{brandId}`, deliberately NOT `{orgId}`.
+   *
+   * `{orgId}` is the tenant-scope parameter: the guard resolves it as "is the
+   * caller a member of this organization", and a non-member gets 404. Platform
+   * staff are members of nothing, so reusing the name would mean either
+   * breaking this route or teaching the tenant guard an exception — and an
+   * exception in the tenant guard is the one place the system cannot afford one.
+   *
+   * The different name says the different thing: here an organization is the
+   * SUBJECT being read, not the scope the caller is acting within.
+   */
+  path: '/v1/admin/brands/{brandId}',
+  summary: 'One brand, across tenants',
+  tags: ['admin'],
+  access: { kind: 'permission', permission: 'platform:read' },
+  pathParams: z.object({ brandId: z.uuid() }),
+  successStatus: 200,
+  response: BrandDetailSchema,
+  errors: ['unauthenticated', 'forbidden', 'not_found'],
+});
+
+export const PlatformCreatorSchema = z.object({
+  creatorId: z.uuid(),
+  handle: z.string(),
+  email: z.email(),
+  payoutsEnabled: z.boolean(),
+  /** A creator on hold cannot be paid, and is the first thing support is asked about. */
+  payoutHoldUntil: z.iso.datetime().nullable(),
+  brandCount: z.int(),
+  activeDealCount: z.int(),
+  totalReleased: MoneySchema,
+  joinedAt: z.iso.datetime(),
+});
+
+export const listPlatformCreators = defineOperation({
+  operationId: 'listPlatformCreators',
+  method: 'get',
+  path: '/v1/admin/creators',
+  summary: 'Every creator on the platform',
+  description:
+    'The population that RECEIVES the money and has the weakest authentication. Payout holds and ' +
+    'disabled payouts are surfaced first, because those are what support is actually contacted about.',
+  tags: ['admin'],
+  access: { kind: 'permission', permission: 'platform:read' },
+  query: z.object({ search: z.string().max(80).optional(), blockedOnly: z.boolean().optional() }),
+  successStatus: 200,
+  response: z.object({
+    creators: z.array(PlatformCreatorSchema),
+    /** Creators who have money owed and cannot receive it. The actionable number. */
+    blockedCount: z.int(),
+  }),
+  errors: ['unauthenticated', 'forbidden'],
+});
+
+/**
+ * The treasury command inbox.
+ *
+ * The internal RPC is a row, not a network call — so the queue IS a table, and
+ * this is that table. A `failed` command is money work that was requested and
+ * did not happen, which is the single most important operational signal in the
+ * system and the reason this screen exists at all.
+ */
+export const TreasuryCommandSchema = z.object({
+  commandId: z.uuid(),
+  kind: z.string(),
+  state: z.enum(['pending', 'claimed', 'succeeded', 'failed', 'abandoned']),
+  organizationId: z.uuid(),
+  organizationName: z.string(),
+  /** How many times a worker has picked this up. A rising count is a stuck command. */
+  attempts: z.int(),
+  claimedBy: z.string().nullable(),
+  claimedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+  /** The failure, in the worker's words. Null while it has not failed. */
+  lastError: z.string().nullable(),
+  /**
+   * What the command expected to be available when it was written.
+   *
+   * The worker re-derives everything authoritative from the database rather than
+   * trusting the payload — the payload is a POINTER, never an instruction — so
+   * this figure is for a human comparing intent against outcome, not for the
+   * worker.
+   */
+  expectedAvailable: MoneySchema.nullable(),
+});
+
+export const listTreasuryCommands = defineOperation({
+  operationId: 'listTreasuryCommands',
+  method: 'get',
+  path: '/v1/admin/treasury-commands',
+  summary: 'The treasury command inbox',
+  description:
+    'Failed commands first. A failed command is money work that was requested and did not happen, ' +
+    'and every one of them is a person waiting for something.',
+  tags: ['admin'],
+  access: { kind: 'permission', permission: 'platform:read' },
+  query: z.object({
+    state: z.enum(['pending', 'claimed', 'succeeded', 'failed', 'abandoned']).optional(),
+  }),
+  successStatus: 200,
+  response: z.object({
+    commands: z.array(TreasuryCommandSchema),
+    failedCount: z.int(),
+    /** Claimed a long time ago and never finished — a worker died holding the lease. */
+    stuckCount: z.int(),
+  }),
+  errors: ['unauthenticated', 'forbidden'],
+});
+
+export const WebhookDeliverySchema = z.object({
+  deliveryId: z.uuid(),
+  source: z.enum(['stripe_platform', 'stripe_connect', 'resend']),
+  eventType: z.string(),
+  /**
+   * Whether the signature verified over the RAW bytes.
+   *
+   * A delivery that fails this is stored and shown rather than dropped: a burst
+   * of signature failures is either a rotated secret or somebody probing, and
+   * both are things an operator needs to see rather than infer from silence.
+   */
+  signatureValid: z.boolean(),
+  state: z.enum(['received', 'processed', 'failed', 'ignored']),
+  receivedAt: z.iso.datetime(),
+  processedAt: z.iso.datetime().nullable(),
+  lastError: z.string().nullable(),
+});
+
+export const listWebhookDeliveries = defineOperation({
+  operationId: 'listWebhookDeliveries',
+  method: 'get',
+  path: '/v1/admin/webhooks',
+  summary: 'Recent webhook deliveries',
+  description:
+    'A blocked or unprocessed webhook is a silent money bug with a three-day fuse — the provider ' +
+    'retries for that long and then stops, and nothing else announces it.',
+  tags: ['admin'],
+  access: { kind: 'permission', permission: 'platform:read' },
+  query: z.object({
+    source: z.enum(['stripe_platform', 'stripe_connect', 'resend']).optional(),
+    failedOnly: z.boolean().optional(),
+  }),
+  successStatus: 200,
+  response: z.object({
+    deliveries: z.array(WebhookDeliverySchema),
+    failedCount: z.int(),
+    /** Verified, stored, and never interpreted. The queue nobody drained. */
+    unprocessedCount: z.int(),
+  }),
+  errors: ['unauthenticated', 'forbidden'],
+});
+
+export const PlatformAuditEventSchema = z.object({
+  seq: z.string().describe('Monotonic, but NOT gapless — a rolled-back transaction burns a value.'),
+  occurredAt: z.iso.datetime(),
+  action: z.string(),
+  label: z.string(),
+  actorEmail: z.email().nullable(),
+  organizationId: z.uuid().nullable(),
+  organizationName: z.string().nullable(),
+  ipAddress: z.string().nullable(),
+  /** Whether this row's hash still matches the chain. False is an incident. */
+  chainValid: z.boolean(),
+});
+
+export const listAuditEvents = defineOperation({
+  operationId: 'listAuditEvents',
+  method: 'get',
+  path: '/v1/admin/audit',
+  summary: 'The audit log, across tenants',
+  description:
+    'Append-only and hash-chained. `chainValid` is per row, so a break is located rather than ' +
+    'merely counted — and the sequence is deliberately NOT checked for gaps, because identity ' +
+    'columns are not gapless and a rolled-back transaction would otherwise alarm on every failure.',
+  tags: ['admin'],
+  access: { kind: 'permission', permission: 'platform:read' },
+  query: z.object({
+    action: z.string().max(80).optional(),
+    organizationId: z.uuid().optional(),
+    moneyOnly: z.boolean().optional(),
+  }),
+  successStatus: 200,
+  response: z.object({
+    events: z.array(PlatformAuditEventSchema),
+    /** Rows whose hash does not match. Must be zero. */
+    chainBreakCount: z.int(),
+  }),
+  errors: ['unauthenticated', 'forbidden'],
+});
+
+export const ADMIN_OPERATIONS = [
+  listBrands,
+  getPlatformStats,
+  getLedgerHealth,
+  getBrandDetail,
+  listPlatformCreators,
+  listTreasuryCommands,
+  listWebhookDeliveries,
+  listAuditEvents,
+] as const;

@@ -60,3 +60,21 @@ export function allocationIdempotencyKey(input: {
 }): string {
   return `allocate:${input.campaignId}:${input.allocatedMinor}:${input.amountMinor}`;
 }
+
+/**
+ * Basis points as a percentage a person reads.
+ *
+ * 2500 → "25", 3750 → "37.5", 3333 → "33.33". Trailing zeros are stripped
+ * because "37.50%" beside "25%" reads as more precision than there is, and the
+ * two are always shown in the same column.
+ *
+ * Integer division first, so the only floating point involved is the fractional
+ * remainder — which is at most two digits and is never money.
+ */
+export function formatPercent(bps: number): string {
+  const whole = Math.trunc(bps / 100);
+  const remainder = Math.abs(bps % 100);
+  if (remainder === 0) return String(whole);
+  const fraction = String(remainder).padStart(2, '0').replace(/0$/, '');
+  return `${whole}.${fraction}`;
+}

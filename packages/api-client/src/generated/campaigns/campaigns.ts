@@ -6,24 +6,33 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  CreateCampaign201,
+  CreateCampaignBody,
+  GetCampaign200,
   ListCampaigns200,
   ListCampaignsParams,
-  Problem
+  Problem,
+  UpdateCampaign200,
+  UpdateCampaignBody
 } from '.././model';
 
 import { rayiFetch } from '../../fetcher';
@@ -134,3 +143,233 @@ export function useListCampaigns<TData = Awaited<ReturnType<typeof listCampaigns
 
 
 
+/**
+ * Creates it in draft with no budget. Allocating is a separate, money-moving action.
+ * @summary Create a campaign
+ */
+export const createCampaign = (
+    orgId: string,
+    createCampaignBody: CreateCampaignBody,
+ ) => {
+      
+      
+      return rayiFetch<CreateCampaign201>(
+      {url: `/v1/orgs/${orgId}/campaigns`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: createCampaignBody
+    },
+      );
+    }
+  
+
+
+export const getCreateCampaignMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaign>>, TError,{orgId: string;data: CreateCampaignBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof createCampaign>>, TError,{orgId: string;data: CreateCampaignBody}, TContext> => {
+
+const mutationKey = ['createCampaign'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCampaign>>, {orgId: string;data: CreateCampaignBody}> = (props) => {
+          const {orgId,data} = props ?? {};
+
+          return  createCampaign(orgId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof createCampaign>>>
+    export type CreateCampaignMutationBody = CreateCampaignBody
+    export type CreateCampaignMutationError = Problem
+
+    /**
+ * @summary Create a campaign
+ */
+export const useCreateCampaign = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaign>>, TError,{orgId: string;data: CreateCampaignBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createCampaign>>,
+        TError,
+        {orgId: string;data: CreateCampaignBody},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateCampaignMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary One campaign
+ */
+export const getCampaign = (
+    orgId: string,
+    campaignId: string,
+ ) => {
+      
+      
+      return rayiFetch<GetCampaign200>(
+      {url: `/v1/orgs/${orgId}/campaigns/${campaignId}`, method: 'GET'
+    },
+      );
+    }
+  
+
+
+
+export const getGetCampaignQueryKey = (orgId?: string,
+    campaignId?: string,) => {
+    return [
+    `/v1/orgs/${orgId}/campaigns/${campaignId}`
+    ] as const;
+    }
+
+    
+export const getGetCampaignQueryOptions = <TData = Awaited<ReturnType<typeof getCampaign>>, TError = Problem>(orgId: string,
+    campaignId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCampaign>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignQueryKey(orgId,campaignId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaign>>> = () => getCampaign(orgId,campaignId, );
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(orgId && campaignId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaign>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCampaignQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaign>>>
+export type GetCampaignQueryError = Problem
+
+
+export function useGetCampaign<TData = Awaited<ReturnType<typeof getCampaign>>, TError = Problem>(
+ orgId: string,
+    campaignId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCampaign>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCampaign>>,
+          TError,
+          Awaited<ReturnType<typeof getCampaign>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCampaign<TData = Awaited<ReturnType<typeof getCampaign>>, TError = Problem>(
+ orgId: string,
+    campaignId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCampaign>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCampaign>>,
+          TError,
+          Awaited<ReturnType<typeof getCampaign>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCampaign<TData = Awaited<ReturnType<typeof getCampaign>>, TError = Problem>(
+ orgId: string,
+    campaignId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCampaign>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary One campaign
+ */
+
+export function useGetCampaign<TData = Awaited<ReturnType<typeof getCampaign>>, TError = Problem>(
+ orgId: string,
+    campaignId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCampaign>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCampaignQueryOptions(orgId,campaignId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Pausing stops new deals being offered. It does NOT pause deals already accepted — a creator mid-way through agreed work does not lose their milestone because a campaign was paused.
+ * @summary Update a campaign
+ */
+export const updateCampaign = (
+    orgId: string,
+    campaignId: string,
+    updateCampaignBody: UpdateCampaignBody,
+ ) => {
+      
+      
+      return rayiFetch<UpdateCampaign200>(
+      {url: `/v1/orgs/${orgId}/campaigns/${campaignId}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateCampaignBody
+    },
+      );
+    }
+  
+
+
+export const getUpdateCampaignMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,{orgId: string;campaignId: string;data: UpdateCampaignBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,{orgId: string;campaignId: string;data: UpdateCampaignBody}, TContext> => {
+
+const mutationKey = ['updateCampaign'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaign>>, {orgId: string;campaignId: string;data: UpdateCampaignBody}> = (props) => {
+          const {orgId,campaignId,data} = props ?? {};
+
+          return  updateCampaign(orgId,campaignId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof updateCampaign>>>
+    export type UpdateCampaignMutationBody = UpdateCampaignBody
+    export type UpdateCampaignMutationError = Problem
+
+    /**
+ * @summary Update a campaign
+ */
+export const useUpdateCampaign = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,{orgId: string;campaignId: string;data: UpdateCampaignBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateCampaign>>,
+        TError,
+        {orgId: string;campaignId: string;data: UpdateCampaignBody},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateCampaignMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    

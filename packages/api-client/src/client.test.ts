@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { setupServer } from 'msw/node';
 
-import { handlers, MOCK_IDS } from './mocks.js';
+import { handlers, MOCK_IDS } from './mocks/index.js';
 import { getOrgFunds, allocateBudget } from './generated/funding/funding.js';
 import { listCampaigns } from './generated/campaigns/campaigns.js';
 import { ApiError } from './fetcher.js';

@@ -56,9 +56,9 @@ function RootLayout() {
       {isAdmin && (
         <header className="border-b border-hair bg-ink">
           <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3">
-            <div className="flex items-baseline gap-3">
+            <div className="flex items-baseline gap-5">
               <span className="text-sm font-semibold tracking-tight text-white">Rayi</span>
-              <span className="text-xs text-white/60">platform staff</span>
+              <AdminNav />
             </div>
             <ScenarioSwitcher dark />
           </div>
@@ -66,8 +66,8 @@ function RootLayout() {
       )}
       {!isCreator && !isAdmin && (
         <header className="border-b border-hair bg-white">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-            <div className="flex items-baseline gap-6">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-3">
+            <div className="flex min-w-0 items-baseline gap-6">
               <span className="text-sm font-semibold tracking-tight text-ink">Rayi</span>
               <BrandNav />
             </div>
@@ -90,12 +90,19 @@ function BrandNav() {
   const activeClass = 'text-sm font-medium text-ink';
 
   return (
-    <nav className="flex items-center gap-4">
+    <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {(
         [
+          // Ordered by how often a brand actually does the thing. Review is
+          // first because it is the job; settings is last because it is not.
           ['/o/$orgId/review', 'Review'],
+          ['/o/$orgId/campaigns', 'Campaigns'],
+          ['/o/$orgId/deals', 'Deals'],
+          ['/o/$orgId/creators', 'Creators'],
           ['/o/$orgId/funds', 'Funds'],
+          ['/o/$orgId/workspaces', 'Workspaces'],
           ['/o/$orgId/members', 'People'],
+          ['/o/$orgId/settings', 'Settings'],
         ] as const
       ).map(([to, label]) => (
         <Link
@@ -108,9 +115,41 @@ function BrandNav() {
           {label}
         </Link>
       ))}
-      <Link to="/me/security" className={linkClass} activeProps={{ className: activeClass }}>
-        Security
-      </Link>
+    </nav>
+  );
+}
+
+/**
+ * Platform staff navigation.
+ *
+ * Its own nav, on its own dark chrome, with no organization in any link — a
+ * platform operator is inside no tenant, and a nav pointing at one particular
+ * brand would say something false about who they are.
+ */
+function AdminNav() {
+  const linkClass = 'text-sm text-white/60 hover:text-white';
+  const activeClass = 'text-sm font-medium text-white';
+
+  return (
+    <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {(
+        [
+          ['/admin', 'Overview'],
+          ['/admin/creators', 'Creators'],
+          ['/admin/ops', 'Operations'],
+          ['/admin/audit', 'Audit'],
+        ] as const
+      ).map(([to, label]) => (
+        <Link
+          key={to}
+          to={to}
+          className={linkClass}
+          activeProps={{ className: activeClass }}
+          activeOptions={{ exact: to === '/admin' }}
+        >
+          {label}
+        </Link>
+      ))}
     </nav>
   );
 }
@@ -173,6 +212,67 @@ const membersRoute = createRoute({
   component: MembersScreen,
 });
 
+const campaignsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/campaigns',
+  component: lazyRouteComponent(() => import('./routes/campaigns'), 'CampaignsScreen'),
+});
+
+const campaignRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/campaigns/$campaignId',
+  component: lazyRouteComponent(() => import('./routes/campaign'), 'CampaignScreen'),
+});
+
+const dealsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/deals',
+  component: lazyRouteComponent(() => import('./routes/deals'), 'DealsScreen'),
+});
+
+const newDealRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  // Before `/deals/$dealId` in the tree, so "new" is never read as an id.
+  path: '/o/$orgId/deals/new',
+  component: lazyRouteComponent(() => import('./routes/deal-new'), 'NewDealScreen'),
+});
+
+const dealRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/deals/$dealId',
+  component: lazyRouteComponent(() => import('./routes/deal'), 'DealScreen'),
+});
+
+const rosterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/creators',
+  component: lazyRouteComponent(() => import('./routes/roster'), 'RosterScreen'),
+});
+
+const rosterCreatorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/creators/$creatorId',
+  component: lazyRouteComponent(() => import('./routes/roster-creator'), 'RosterCreatorScreen'),
+});
+
+const workspacesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/workspaces',
+  component: lazyRouteComponent(() => import('./routes/workspaces'), 'WorkspacesScreen'),
+});
+
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/workspaces/$workspaceId',
+  component: lazyRouteComponent(() => import('./routes/workspace'), 'WorkspaceScreen'),
+});
+
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/o/$orgId/settings',
+  component: lazyRouteComponent(() => import('./routes/settings'), 'SettingsScreen'),
+});
+
 // ---------------------------------------------------------------------------
 // Account — not org-scoped, because the resource is the caller
 // ---------------------------------------------------------------------------
@@ -204,6 +304,18 @@ const creatorDealRoute = createRoute({
   component: lazyRouteComponent(() => import('./routes/creator/deal'), 'CreatorDealScreen'),
 });
 
+const creatorPayoutsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/me/payouts',
+  component: lazyRouteComponent(() => import('./routes/creator/payouts'), 'CreatorPayoutsScreen'),
+});
+
+const creatorProfileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/me/profile',
+  component: lazyRouteComponent(() => import('./routes/creator/profile'), 'CreatorProfileScreen'),
+});
+
 // ---------------------------------------------------------------------------
 // Super admin — lazily loaded
 // ---------------------------------------------------------------------------
@@ -221,15 +333,63 @@ const adminRoute = createRoute({
   component: lazyRouteComponent(() => import('./routes/admin/overview'), 'AdminOverviewScreen'),
 });
 
+const adminBrandRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/brands/$brandId',
+  component: lazyRouteComponent(() => import('./routes/admin/brand'), 'AdminBrandScreen'),
+});
+
+const adminCreatorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/creators',
+  component: lazyRouteComponent(() => import('./routes/admin/creators'), 'AdminCreatorsScreen'),
+});
+
+const adminOpsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/ops',
+  component: lazyRouteComponent(() => import('./routes/admin/ops'), 'AdminOpsScreen'),
+});
+
+const adminAuditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/audit',
+  component: lazyRouteComponent(() => import('./routes/admin/audit'), 'AdminAuditScreen'),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
+
+  // Brand
   reviewRoute,
   fundsRoute,
+  campaignsRoute,
+  campaignRoute,
+  newDealRoute,
+  dealsRoute,
+  dealRoute,
+  rosterRoute,
+  rosterCreatorRoute,
+  workspacesRoute,
+  workspaceRoute,
   membersRoute,
+  settingsRoute,
+
+  // Account
   securityRoute,
+
+  // Creator
   creatorHomeRoute,
   creatorDealRoute,
+  creatorPayoutsRoute,
+  creatorProfileRoute,
+
+  // Super admin
   adminRoute,
+  adminBrandRoute,
+  adminCreatorsRoute,
+  adminOpsRoute,
+  adminAuditRoute,
 ]);
 
 export const router = createRouter({ routeTree });
