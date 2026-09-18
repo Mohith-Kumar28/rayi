@@ -1,7 +1,8 @@
 /**
  * Retry-on-transient-database-failure.
  *
- * ALL knowledge of database error codes lives in this one file. That is
+ * All knowledge of what database error codes MEAN lives in this one file (the
+ * walker that finds a SQLSTATE is shared, in `database/sqlstate.ts`). That is
  * deliberate: Prisma's `P####` codes change across majors — Prisma 8 removes
  * them entirely — so confining them here makes the eventual upgrade a one-file
  * change rather than a hunt through the money path.
@@ -37,26 +38,14 @@ const TERMINAL_SQLSTATES = new Set([
   '0A000', // feature_not_supported  — our append-only triggers raise this
 ]);
 
-/** Walks the `cause` chain, since drivers and ORMs wrap the original error. */
-export function sqlStateOf(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 10 && current; depth += 1) {
-    const candidate = current as {
-      code?: unknown;
-      cause?: unknown;
-      meta?: { code?: unknown };
-    };
+/*
+ * The walker itself lives in `database/sqlstate.ts`, because the api side
+ * needs it too and may not import from `src/ledger/`. What stays here is the
+ * ledger's judgement about which codes mean what.
+ */
+import { sqlStateOf } from '@/database/sqlstate';
 
-    // node-postgres puts SQLSTATE on `code`; Prisma sometimes tucks the driver
-    // error under `meta`.
-    for (const value of [candidate.code, candidate.meta?.code]) {
-      if (typeof value === 'string' && /^[0-9A-Z]{5}$/.test(value))
-        return value;
-    }
-    current = candidate.cause;
-  }
-  return undefined;
-}
+export { sqlStateOf };
 
 export function isRetryable(error: unknown): boolean {
   const state = sqlStateOf(error);

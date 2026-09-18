@@ -1,8 +1,14 @@
 import { Module } from '@nestjs/common';
 
+import { AuditModule } from '@/audit/audit.module';
 import { AuthorizationModule } from '@/authorization/authorization.module';
+import { StepUpModule } from '@/auth/step-up/step-up.module';
 import { PrismaModule } from '@/database/prisma.module';
 
+import { WorkspacesModule } from '../workspaces/workspaces.module';
+
+import { DealsController } from './deals.controller';
+import { DealsService } from './deals.service';
 import { ReviewController } from './review.controller';
 import { ReviewQueueService } from './review-queue.service';
 import { ReviewService } from './review.service';
@@ -19,9 +25,9 @@ import { ReviewService } from './review.service';
  * dependency-cruiser holds it to the same rule as every other api-side module.
  */
 @Module({
-  imports: [PrismaModule, AuthorizationModule],
-  controllers: [ReviewController],
-  providers: [ReviewService, ReviewQueueService],
-  exports: [ReviewService, ReviewQueueService],
+  imports: [PrismaModule, AuthorizationModule, StepUpModule, AuditModule, WorkspacesModule],
+  controllers: [ReviewController, DealsController],
+  providers: [ReviewService, ReviewQueueService, DealsService],
+  exports: [ReviewService, ReviewQueueService, DealsService],
 })
 export class DealsModule {}

@@ -18,4 +18,9 @@ export const StartStepUpBodyPurpose = {
   'member:remove': 'member:remove',
   'money_authority:grant': 'money_authority:grant',
   'funds:release': 'funds:release',
+  'budget:approve': 'budget:approve',
+  'deal:offer': 'deal:offer',
+  'deal:terminate': 'deal:terminate',
+  'org:update': 'org:update',
+  'payout_destination:change': 'payout_destination:change',
 } as const;

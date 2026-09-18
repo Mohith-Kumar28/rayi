@@ -699,7 +699,7 @@ export const brandHandlers = [
         title?: string;
         amount?: { amountMinor?: string };
         percentageBps?: number;
-        condition?: { type?: string; count?: number; date?: string };
+        condition?: { type?: string; count?: number; at?: string };
       }>;
       deliverables?: unknown[];
     };
@@ -733,8 +733,8 @@ export const brandHandlers = [
         condition.type === 'ADVANCE' ||
         (condition.type === 'DELIVERABLES_APPROVED_COUNT' && (condition.count ?? 0) === 0) ||
         (condition.type === 'DATE_REACHED' &&
-          condition.date != null &&
-          new Date(condition.date).getTime() <= Date.now());
+          condition.at != null &&
+          new Date(condition.at).getTime() <= Date.now());
 
       return {
         title: input.title ?? 'Milestone',

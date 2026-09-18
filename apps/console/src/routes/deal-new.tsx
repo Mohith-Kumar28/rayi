@@ -129,8 +129,10 @@ export function NewDealScreen() {
                   }
                 : row.condition === 'DATE_REACHED'
                   ? {
+                      // `at`, the field the engine reads. See the note on
+                      // MilestoneConditionSchema.
                       type: 'DATE_REACHED' as const,
-                      date: row.date ? new Date(row.date).toISOString() : new Date().toISOString(),
+                      at: row.date ? new Date(row.date).toISOString() : new Date().toISOString(),
                     }
                   : { type: row.condition },
           })),

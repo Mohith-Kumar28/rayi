@@ -275,9 +275,43 @@ handlers from the generated client.
 - [ ] Origin isolation for `/admin` — it now has its own chrome and nav, but still shares an origin.
       That is a deployment change, not a code one
 - [ ] `<Countdown>` extraction, org switcher, public `/@handle` pages
-- [ ] **No backend for the 31 new operations.** Contracts, generated client, mocks and UI exist;
-      the controllers, services and migrations do not. This is the repo's own "UI first, against
-      mocks" order, but it means these screens are not wired to a database yet
+- [x] ~~No backend for the 31 new operations~~ — **built**. Services, controllers and migrations for
+      workspaces, budget envelopes, campaigns, deals, the roster, the organization, invitations,
+      creator payouts and the four admin operational surfaces. 26 new integration tests
+
+### The budget envelope is a ceiling, enforced by the storage engine
+
+`CHECK (committedMinor <= ceilingMinor)` plus a conditional UPDATE, which is the same shape as the
+ledger's `balance_minor >= 0`: an over-commit is a **storage-engine error**, not a race somebody has
+to remember to guard. Two concurrent offers against a ceiling that funds one — exactly one succeeds,
+asserted rather than swallowed.
+
+Hitting the ceiling hard-blocks NEW commitments and leaves accepted deals running. An expired
+envelope behaves identically. A ceiling set below what is already committed is **refused**, because
+lowering one claws nothing back and accepting the write would only make the stored numbers disagree
+with the deals that are running.
+
+### Four drifts the new work surfaced, each now a failing test rather than a silence
+
+- **`DATE_REACHED` carried `date` in the contract and `at` in the engine.** A dated milestone
+  evaluated `undefined`: it would never satisfy, and a past-dated advance would have slipped the
+  disclosure. `condition-parity.test.ts` feeds every shape the contract accepts to the real
+  `evaluateCondition` rather than comparing type names — which would have passed.
+- **A route could declare a permission no role held.** It fails closed, which is why it is
+  dangerous: it 403s for everyone including the owner, nothing alarms, and the first report is a
+  customer saying a button does nothing. `permission-coverage.integration-spec.ts`, with a negative
+  case.
+- **`sqlStateOf` could not see a SQLSTATE on `PrismaClientUnknownRequestError`** — no `code`, no
+  `meta`, the connector error stringified into the message. Every constraint refusal on a Prisma
+  `updateMany` arrives that way, so a correct database refusal read as an unknown failure.
+- **The api-client barrel is hand-written and orval emits one directory per tag.** A new tag
+  compiled, typechecked and was simply not exported.
+
+### `signatureValid` was removed from the webhook contract
+
+A delivery whose signature does not verify is refused at the edge and never becomes a row, so the
+field could only ever read `true` — and a badge that is always the same teaches an operator to stop
+seeing it. The burst-of-failures signal belongs in a rate alarm on the rejecting handler.
 
 ### The review queue is exceptions plus one bar
 

@@ -2,173 +2,175 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider      = "prisma-client-js"
-    binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
-    User
-    Admin
+  User
+  Admin
 }
 
 // Base model fields
 model User {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    // User specific fields
-    username         String  @unique
-    displayUsername  String?
-    email            String  @unique
-    isEmailVerified  Boolean @default(false)
-    role             Role    @default(User)
-    firstName        String?
-    lastName         String?
-    image            String?
-    bio              String?
-    twoFactorEnabled Boolean @default(false)
+  // User specific fields
+  username         String  @unique
+  displayUsername  String?
+  email            String  @unique
+  isEmailVerified  Boolean @default(false)
+  role             Role    @default(User)
+  firstName        String?
+  lastName         String?
+  image            String?
+  bio              String?
+  twoFactorEnabled Boolean @default(false)
 
-    // Relations
-    accounts   Account[]
-    sessions   Session[]
-    passkeys   Passkey[]
-    twoFactors TwoFactor[]
+  // Relations
+  accounts   Account[]
+  sessions   Session[]
+  passkeys   Passkey[]
+  twoFactors TwoFactor[]
 
-    // Created/Updated by relations
-    stepUpGrants        StepUpGrant[]
-    twoFactorEnrolment  TwoFactorEnrolment?
-    backupCodes2        TwoFactorBackupCode[]
-    emailChangeRequests EmailChangeRequest[]
+  // Created/Updated by relations
+  stepUpGrants        StepUpGrant[]
+  twoFactorEnrolment  TwoFactorEnrolment?
+  backupCodes2        TwoFactorBackupCode[]
+  emailChangeRequests EmailChangeRequest[]
 
-    createdFiles File[] @relation("CreatedFiles")
-    updatedFiles File[] @relation("UpdatedFiles")
-    deletedFiles File[] @relation("DeletedFiles")
+  createdFiles File[] @relation("CreatedFiles")
+  updatedFiles File[] @relation("UpdatedFiles")
+  deletedFiles File[] @relation("DeletedFiles")
 
-    @@map("user")
+  members           Member[]
+  deals             Deal[]
+  payouts           Payout[]
+  payoutDestination PayoutDestination?
 
-    members       Member[]
-    deals         Deal[]
+  @@map("user")
 }
 
 model Account {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    userId String
-    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    accountId             String
-    providerId            String // 'credential' in better-auth
-    accessToken           String?
-    refreshToken          String?
-    accessTokenExpiresAt  DateTime?
-    refreshTokenExpiresAt DateTime?
-    scope                 String?
-    idToken               String?
-    password              String?
+  accountId             String
+  providerId            String // 'credential' in better-auth
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
 
-    @@map("account")
+  @@map("account")
 }
 
 model Session {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    userId String
-    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    token     String
-    expiresAt DateTime
-    ipAddress String?
-    userAgent String?
+  token     String
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
 
-    @@map("session")
+  @@map("session")
 }
 
 model Verification {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    identifier String
-    value      String
-    expiresAt  DateTime
+  identifier String
+  value      String
+  expiresAt  DateTime
 
-    @@map("verification")
+  @@map("verification")
 }
 
 model Passkey {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    name   String?
-    userId String
-    user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String?
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    publicKey    String
-    credentialID String
-    counter      Int
-    deviceType   String
-    backedUp     String
-    transports   String
+  publicKey    String
+  credentialID String
+  counter      Int
+  deviceType   String
+  backedUp     String
+  transports   String
 
-    @@map("passkey")
+  @@map("passkey")
 }
 
 model TwoFactor {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    userId String
-    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    secret      String?
-    backupCodes String?
+  secret      String?
+  backupCodes String?
 
-    @@map("twoFactor")
+  @@map("twoFactor")
 }
 
 // Example of converting a CreatorModel entity
 model File {
-    id        String    @id @default(cuid())
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
-    deletedAt DateTime?
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-    // File specific fields
-    filename     String
-    originalName String
-    mimeType     String
-    size         Int
-    path         String
+  // File specific fields
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
 
-    // Creator model fields
-    createdByUserId String?
-    createdBy       User?   @relation("CreatedFiles", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  // Creator model fields
+  createdByUserId String?
+  createdBy       User?   @relation("CreatedFiles", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
-    updatedByUserId String?
-    updatedBy       User?   @relation("UpdatedFiles", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  updatedByUserId String?
+  updatedBy       User?   @relation("UpdatedFiles", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
-    deletedByUserId String?
-    deletedBy       User?   @relation("DeletedFiles", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+  deletedByUserId String?
+  deletedBy       User?   @relation("DeletedFiles", fields: [deletedByUserId], references: [id], onDelete: SetNull)
 
-    @@map("file")
+  @@map("file")
 }
 
 // ============================================================================
@@ -183,18 +185,18 @@ model File {
 // See docs/02-decisions.md for why each of these exists.
 
 model Organization {
-    id        String   @id @default(uuid())
-    name      String
-    slug      String   @unique
-    logo      String?
-    metadata  String?
-    createdAt DateTime @default(now())
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  metadata  String?
+  createdAt DateTime @default(now())
 
-    members     Member[]
-    workspaces  Workspace[]
-    invitations Invitation[]
+  members     Member[]
+  workspaces  Workspace[]
+  invitations Invitation[]
 
-    @@map("organization")
+  @@map("organization")
 }
 
 /// Org membership. `role` is deliberately COARSE — owner/admin/member only.
@@ -203,60 +205,61 @@ model Organization {
 /// `MONEY_ROLES.has(role)` check is false for 'member,finance' and an admin can
 /// invite someone as owner. See docs/05-security.md.
 model Member {
-    id             String   @id @default(uuid())
-    organizationId String
-    userId         String
-    role           String   @default("member")
-    createdAt      DateTime @default(now())
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  role           String   @default("member")
+  createdAt      DateTime @default(now())
 
-    organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-    workspaceMembers WorkspaceMember[]
-    moneyAuthorities MoneyAuthority[]
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceMembers WorkspaceMember[]
+  moneyAuthorities MoneyAuthority[]
 
-    @@unique([organizationId, userId])
-    /// Referenced by WorkspaceMember's composite FK so "the member and the
-    /// workspace belong to the same org" is a database invariant, not a
-    /// comparison someone can forget.
-    @@unique([id, organizationId])
-    @@map("member")
+  @@unique([organizationId, userId])
+  /// Referenced by WorkspaceMember's composite FK so "the member and the
+  /// workspace belong to the same org" is a database invariant, not a
+  /// comparison someone can forget.
+  @@unique([id, organizationId])
+  @@map("member")
 }
 
 /// A sub-brand, product line or market. Groups campaigns and people.
 /// Holds NO money — the ledger stays org → campaign. A workspace budget is an
 /// authorization ceiling (BudgetEnvelope), not a ledger account.
 model Workspace {
-    id             String   @id @default(uuid())
-    organizationId String
-    name           String
-    slug           String
-    createdAt      DateTime @default(now())
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  slug           String
+  createdAt      DateTime @default(now())
 
-    organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    members      WorkspaceMember[]
-    campaigns    Campaign[]
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      WorkspaceMember[]
+  campaigns    Campaign[]
+  envelope     BudgetEnvelope?
 
-    @@unique([organizationId, slug])
-    @@unique([id, organizationId])
-    @@map("workspace")
+  @@unique([organizationId, slug])
+  @@unique([id, organizationId])
+  @@map("workspace")
 }
 
 model WorkspaceMember {
-    id             String   @id @default(uuid())
-    workspaceId    String
-    memberId       String
-    organizationId String
-    role           String   @default("viewer")
-    createdAt      DateTime @default(now())
+  id             String   @id @default(uuid())
+  workspaceId    String
+  memberId       String
+  organizationId String
+  role           String   @default("viewer")
+  createdAt      DateTime @default(now())
 
-    /// Both composite FKs carry organizationId, so a member of org A cannot be
-    /// attached to a workspace in org B. Workspace slugs are unique per-org, not
-    /// globally, so without this the two independent FKs would permit exactly that.
-    workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
-    member    Member    @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  /// Both composite FKs carry organizationId, so a member of org A cannot be
+  /// attached to a workspace in org B. Workspace slugs are unique per-org, not
+  /// globally, so without this the two independent FKs would permit exactly that.
+  workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  member    Member    @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
-    @@unique([workspaceId, memberId])
-    @@map("workspace_member")
+  @@unique([workspaceId, memberId])
+  @@map("workspace_member")
 }
 
 /// The ONLY thing that grants the ability to move money.
@@ -265,22 +268,22 @@ model WorkspaceMember {
 /// controller under step-up and dual control — a path Better Auth's route
 /// surface cannot reach.
 model MoneyAuthority {
-    id             String    @id @default(uuid())
-    memberId       String
-    organizationId String
-    /// e.g. 'campaign:allocate', 'deliverable:release', 'funds:refund'
-    capability     String
-    /// Per-transaction ceiling in minor units. Null means "org default applies".
-    limitMinor     BigInt?
-    grantedBy      String
-    grantedAt      DateTime  @default(now())
-    revokedAt      DateTime?
+  id             String    @id @default(uuid())
+  memberId       String
+  organizationId String
+  /// e.g. 'campaign:allocate', 'deliverable:release', 'funds:refund'
+  capability     String
+  /// Per-transaction ceiling in minor units. Null means "org default applies".
+  limitMinor     BigInt?
+  grantedBy      String
+  grantedAt      DateTime  @default(now())
+  revokedAt      DateTime?
 
-    member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-    @@unique([memberId, capability])
-    @@index([organizationId])
-    @@map("money_authority")
+  @@unique([memberId, capability])
+  @@index([organizationId])
+  @@map("money_authority")
 }
 
 /// Role → permission mapping, owned by Rayi rather than by Better Auth.
@@ -289,16 +292,16 @@ model MoneyAuthority {
 /// generated FROM this at boot with an equality assertion, so there is one
 /// authority rather than two that drift.
 model RolePermission {
-    id         String @id @default(uuid())
-    /// 'owner' | 'admin' | 'member' for org scope; 'workspace_admin' |
-    /// 'campaign_manager' | 'reviewer' | 'viewer' for workspace scope.
-    role       String
-    scope      String
-    permission String
+  id         String @id @default(uuid())
+  /// 'owner' | 'admin' | 'member' for org scope; 'workspace_admin' |
+  /// 'campaign_manager' | 'reviewer' | 'viewer' for workspace scope.
+  role       String
+  scope      String
+  permission String
 
-    @@unique([role, scope, permission])
-    @@index([role, scope])
-    @@map("role_permission")
+  @@unique([role, scope, permission])
+  @@index([role, scope])
+  @@map("role_permission")
 }
 
 /// The internal "RPC".
@@ -314,71 +317,71 @@ model RolePermission {
 /// authorization before calling Stripe, because a sweep executes long after the
 /// request, when the approver may have been removed.
 model TreasuryCommand {
-    id   String @id @default(uuid())
-    kind String
+  id   String @id @default(uuid())
+  kind String
 
-    /// DERIVED from the intent (`allocate:{campaignId}:{version}`), never random.
-    /// Identical across a page refresh, a second tab and a React remount — which
-    /// matters because a refresh is exactly what a user does when a money action
-    /// appears to hang.
-    idempotencyKey String @unique
+  /// DERIVED from the intent (`allocate:{campaignId}:{version}`), never random.
+  /// Identical across a page refresh, a second tab and a React remount — which
+  /// matters because a refresh is exactly what a user does when a money action
+  /// appears to hang.
+  idempotencyKey String @unique
 
-    organizationId String
-    workspaceId    String?
-    campaignId     String?
+  organizationId String
+  workspaceId    String?
+  campaignId     String?
 
-    /// Requested amount, in minor units. The worker re-reads the authoritative
-    /// figure; this is recorded for audit and for comparison, never paid from.
-    amountMinor BigInt
-    currency    String
+  /// Requested amount, in minor units. The worker re-reads the authoritative
+  /// figure; this is recorded for audit and for comparison, never paid from.
+  amountMinor BigInt
+  currency    String
 
-    /// What the requester BELIEVED was available when they decided the amount.
-    ///
-    /// An assertion, never an instruction. The worker compares it against the
-    /// real lot balance and refuses on mismatch, because an allocation sized
-    /// against a stale figure is a decision the user did not actually make —
-    /// they meant "most of what is left", and what is left has changed.
-    ///
-    /// Carried on the command rather than checked at the API because the API
-    /// cannot see the ledger: its database role has no grants on that schema.
-    /// The check has to happen where the truth is.
-    expectedAvailableMinor BigInt?
+  /// What the requester BELIEVED was available when they decided the amount.
+  ///
+  /// An assertion, never an instruction. The worker compares it against the
+  /// real lot balance and refuses on mismatch, because an allocation sized
+  /// against a stale figure is a decision the user did not actually make —
+  /// they meant "most of what is left", and what is left has changed.
+  ///
+  /// Carried on the command rather than checked at the API because the API
+  /// cannot see the ledger: its database role has no grants on that schema.
+  /// The check has to happen where the truth is.
+  expectedAvailableMinor BigInt?
 
-    /// pending | processing | completed | failed
-    ///
-    /// `pending` and `processing` are both live work. A crashed worker leaves a
-    /// row in `processing` forever, so the sweep RECLAIMS one whose lease has
-    /// expired — safe only because `ledger.post_entry` is idempotent on this
-    /// row's id, so a reclaim of work that did in fact post converges rather
-    /// than paying twice.
-    status String @default("pending")
+  /// pending | processing | completed | failed
+  ///
+  /// `pending` and `processing` are both live work. A crashed worker leaves a
+  /// row in `processing` forever, so the sweep RECLAIMS one whose lease has
+  /// expired — safe only because `ledger.post_entry` is idempotent on this
+  /// row's id, so a reclaim of work that did in fact post converges rather
+  /// than paying twice.
+  status String @default("pending")
 
-    /// The lease. A worker claims a batch by flipping pending → processing under
-    /// `FOR UPDATE SKIP LOCKED`, so two workers never claim the same row.
-    claimedAt DateTime?
-    claimedBy String?
-    /// Bounded, so a command that fails the same way forever stops being retried
-    /// and becomes something a human looks at.
-    attempts  Int       @default(0)
+  /// The lease. A worker claims a batch by flipping pending → processing under
+  /// `FOR UPDATE SKIP LOCKED`, so two workers never claim the same row.
+  claimedAt DateTime?
+  claimedBy String?
+  /// Bounded, so a command that fails the same way forever stops being retried
+  /// and becomes something a human looks at.
+  attempts  Int       @default(0)
 
-    /// Who asked, and under what authority. Re-verified at execution time.
-    actorUserId   String
-    actorMemberId String
-    requestId     String?
+  /// Who asked, and under what authority. Re-verified at execution time.
+  actorUserId   String
+  actorMemberId String
+  requestId     String?
 
-    /// Set once the worker has posted. Links the command to its ledger entry.
-    ledgerEntryId String?
-    failureReason String?
+  /// Set once the worker has posted. Links the command to its ledger entry.
+  ledgerEntryId String?
+  failureReason String?
 
-    createdAt   DateTime  @default(now())
-    processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
 
-    /// The claim query's index: find live work, oldest first.
-    @@index([status, createdAt])
-    /// Finding expired leases to reclaim.
-    @@index([status, claimedAt])
-    @@index([organizationId])
-    @@map("treasury_command")
+  /// The claim query's index: find live work, oldest first.
+  @@index([status, createdAt])
+  /// Finding expired leases to reclaim.
+  @@index([status, claimedAt])
+  @@index([organizationId])
+  @@map("treasury_command")
 }
 
 /// A campaign — the unit budget is allocated to.
@@ -390,39 +393,42 @@ model TreasuryCommand {
 /// in another organization — a perfectly balanced posting against the wrong
 /// tenant.
 model Campaign {
-    id             String   @id @default(uuid())
-    organizationId String
-    workspaceId    String
-    name           String
-    /// draft | funded | live | paused | completed | cancelled
-    state          String   @default("draft")
-    currency       String   @default("USD")
-    createdAt      DateTime @default(now())
+  id             String    @id @default(uuid())
+  organizationId String
+  workspaceId    String
+  name           String
+  brief          String?
+  /// draft | funded | live | paused | completed | cancelled
+  state          String    @default("draft")
+  currency       String    @default("USD")
+  startsAt       DateTime?
+  endsAt         DateTime?
+  createdAt      DateTime  @default(now())
 
-    /// GENERATED ALWAYS columns, written by Postgres and never by application
-    /// code — an INSERT or UPDATE naming them is rejected by the database.
-    /// They project the TEXT ids into `uuid` so the ledger, which types every
-    /// identifier as `uuid`, can carry a real foreign key onto this table.
-    /// Declared here only so Prisma knows they exist and does not plan a drop.
-    idUuid             String? @default(dbgenerated()) @map("id_uuid") @db.Uuid
-    organizationIdUuid String? @default(dbgenerated()) @map("organization_id_uuid") @db.Uuid
+  /// GENERATED ALWAYS columns, written by Postgres and never by application
+  /// code — an INSERT or UPDATE naming them is rejected by the database.
+  /// They project the TEXT ids into `uuid` so the ledger, which types every
+  /// identifier as `uuid`, can carry a real foreign key onto this table.
+  /// Declared here only so Prisma knows they exist and does not plan a drop.
+  idUuid             String? @default(dbgenerated()) @map("id_uuid") @db.Uuid
+  organizationIdUuid String? @default(dbgenerated()) @map("organization_id_uuid") @db.Uuid
 
-    /// The composite FK carries organizationId, so a campaign cannot point at a
-    /// workspace in a different org. Same trick as WorkspaceMember, and it is what
-    /// lets the use case derive the workspace from the campaign and trust the
-    /// result — the workspace scope a permission is checked against is then a
-    /// database fact rather than a client-supplied parameter.
-    workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  /// The composite FK carries organizationId, so a campaign cannot point at a
+  /// workspace in a different org. Same trick as WorkspaceMember, and it is what
+  /// lets the use case derive the workspace from the campaign and trust the
+  /// result — the workspace scope a permission is checked against is then a
+  /// database fact rather than a client-supplied parameter.
+  workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
-    deals Deal[]
+  deals Deal[]
 
-    /// Referenced by ledger account parentage: an account tagged with this
-    /// campaign is necessarily an account of this organization.
-    @@unique([id, organizationId])
-    /// The target of the ledger's parentage foreign key.
-    @@unique([idUuid, organizationIdUuid], map: "campaign_uuid_parentage_key")
-    @@index([organizationId, state])
-    @@map("campaign")
+  /// Referenced by ledger account parentage: an account tagged with this
+  /// campaign is necessarily an account of this organization.
+  @@unique([id, organizationId])
+  /// The target of the ledger's parentage foreign key.
+  @@unique([idUuid, organizationIdUuid], map: "campaign_uuid_parentage_key")
+  @@index([organizationId, state])
+  @@map("campaign")
 }
 
 /// Every webhook we receive, stored RAW before anything interprets it.
@@ -439,41 +445,41 @@ model Campaign {
 /// later must use those bytes. Parsing to jsonb would reorder keys, collapse
 /// duplicates and normalise numbers, and the stored row would no longer verify.
 model WebhookEvent {
-    id String @id @default(uuid())
+  id String @id @default(uuid())
 
-    /// 'resend' | 'stripe_platform' | 'stripe_connect'
-    source String
+  /// 'resend' | 'stripe_platform' | 'stripe_connect'
+  source String
 
-    /// The PROVIDER's id for this delivery. Idempotency lives here: a provider
-    /// retrying a delivery it already made must not produce a second row, and a
-    /// retry is the normal case, not an exception.
-    externalId String
+  /// The PROVIDER's id for this delivery. Idempotency lives here: a provider
+  /// retrying a delivery it already made must not produce a second row, and a
+  /// retry is the normal case, not an exception.
+  externalId String
 
-    /// Declared by the payload. Recorded for routing and never trusted: the
-    /// handler re-reads whatever it needs from the body or from the provider.
-    eventType String
+  /// Declared by the payload. Recorded for routing and never trusted: the
+  /// handler re-reads whatever it needs from the body or from the provider.
+  eventType String
 
-    /// Raw bytes as received. See above.
-    payload String
+  /// Raw bytes as received. See above.
+  payload String
 
-    /// Verbatim, for forensics. A dispute about what a provider sent is settled
-    /// by replaying the signature over the stored body with the stored headers.
-    headers Json
+  /// Verbatim, for forensics. A dispute about what a provider sent is settled
+  /// by replaying the signature over the stored body with the stored headers.
+  headers Json
 
-    receivedAt DateTime @default(now())
+  receivedAt DateTime @default(now())
 
-    /// pending | processed | failed | ignored
-    status        String    @default("pending")
-    processedAt   DateTime?
-    failureReason String?
-    attempts      Int       @default(0)
+  /// pending | processed | failed | ignored
+  status        String    @default("pending")
+  processedAt   DateTime?
+  failureReason String?
+  attempts      Int       @default(0)
 
-    /// One row per provider delivery. This unique index IS the idempotency
-    /// guarantee — not an application check that a future code path can skip.
-    @@unique([source, externalId])
-    @@index([status, receivedAt])
-    @@index([source, eventType, receivedAt])
-    @@map("webhook_event")
+  /// One row per provider delivery. This unique index IS the idempotency
+  /// guarantee — not an application check that a future code path can skip.
+  @@unique([source, externalId])
+  @@index([status, receivedAt])
+  @@index([source, eventType, receivedAt])
+  @@map("webhook_event")
 }
 
 /// Addresses we must stop emailing.
@@ -487,34 +493,34 @@ model WebhookEvent {
 /// is dead looks exactly like one who has not read their email, and the first
 /// symptom is an unexplained missing payout.
 model EmailSuppression {
-    id String @id @default(uuid())
+  id String @id @default(uuid())
 
-    /// Lower-cased on write. Uniqueness is enforced by a FUNCTIONAL index on
-    /// `lower(email)`, which Prisma cannot express — so there is deliberately no
-    /// `@unique` here.
-    ///
-    /// A plain `@unique` on the raw column would let `A@b.com` be inserted
-    /// alongside a suppression on `a@b.com`, and the second address would keep
-    /// receiving mail. Lower-casing in application code is a convention a future
-    /// path can forget; the index is not.
-    ///
-    /// Consequence: look these up with `findFirst`, never `findUnique`.
-    email String
+  /// Lower-cased on write. Uniqueness is enforced by a FUNCTIONAL index on
+  /// `lower(email)`, which Prisma cannot express — so there is deliberately no
+  /// `@unique` here.
+  ///
+  /// A plain `@unique` on the raw column would let `A@b.com` be inserted
+  /// alongside a suppression on `a@b.com`, and the second address would keep
+  /// receiving mail. Lower-casing in application code is a convention a future
+  /// path can forget; the index is not.
+  ///
+  /// Consequence: look these up with `findFirst`, never `findUnique`.
+  email String
 
-    /// hard_bounce | complaint | manual
-    reason String
+  /// hard_bounce | complaint | manual
+  reason String
 
-    /// The webhook that caused it, so a suppression can always be explained.
-    webhookEventId String?
+  /// The webhook that caused it, so a suppression can always be explained.
+  webhookEventId String?
 
-    suppressedAt DateTime  @default(now())
-    /// Set when a human clears it — a bounce can be a temporary mail-server
-    /// misconfiguration, so this must be reversible.
-    liftedAt     DateTime?
-    liftedBy     String?
+  suppressedAt DateTime  @default(now())
+  /// Set when a human clears it — a bounce can be a temporary mail-server
+  /// misconfiguration, so this must be reversible.
+  liftedAt     DateTime?
+  liftedBy     String?
 
-    @@index([reason, suppressedAt])
-    @@map("email_suppression")
+  @@index([reason, suppressedAt])
+  @@map("email_suppression")
 }
 
 /// Proof that the person at the keyboard held the second factor, a moment ago.
@@ -528,42 +534,42 @@ model EmailSuppression {
 /// review found exactly this — a bulk-approve grant that was neither
 /// single-use nor resource-bound became "five minutes of unlimited releases".
 model StepUpGrant {
-    id     String @id @default(uuid())
-    userId String
+  id     String @id @default(uuid())
+  userId String
 
-    /// What this grant authorises, e.g. 'account:change_email'. One purpose per
-    /// grant: a grant minted to change an email cannot remove a second factor.
-    purpose String
+  /// What this grant authorises, e.g. 'account:change_email'. One purpose per
+  /// grant: a grant minted to change an email cannot remove a second factor.
+  purpose String
 
-    /// A hash of the exact resource and terms being confirmed — the campaign id
-    /// and amount, the member and the new role. NULL only where the purpose has
-    /// no parameters at all.
-    ///
-    /// Without it, confirming "$10 to campaign A" authorises "$10,000 to
-    /// campaign B" for as long as the grant lives.
-    resourceHash String?
+  /// A hash of the exact resource and terms being confirmed — the campaign id
+  /// and amount, the member and the new role. NULL only where the purpose has
+  /// no parameters at all.
+  ///
+  /// Without it, confirming "$10 to campaign A" authorises "$10,000 to
+  /// campaign B" for as long as the grant lives.
+  resourceHash String?
 
-    /// Almost always 1. A grant that can be spent twice is a grant that can be
-    /// spent on something the user did not see.
-    usesRemaining Int @default(1)
+  /// Almost always 1. A grant that can be spent twice is a grant that can be
+  /// spent on something the user did not see.
+  usesRemaining Int @default(1)
 
-    expiresAt DateTime
-    createdAt DateTime @default(now())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-    /// Set when spent. Kept rather than deleted so "was this confirmed, and
-    /// when" is answerable afterwards.
-    consumedAt DateTime?
+  /// Set when spent. Kept rather than deleted so "was this confirmed, and
+  /// when" is answerable afterwards.
+  consumedAt DateTime?
 
-    /// Forensics: the request that minted it.
-    ipAddress String?
-    userAgent String?
+  /// Forensics: the request that minted it.
+  ipAddress String?
+  userAgent String?
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    /// The consume path's index: find a live grant for this user, purpose and
-    /// resource.
-    @@index([userId, purpose, expiresAt])
-    @@map("step_up_grant")
+  /// The consume path's index: find a live grant for this user, purpose and
+  /// resource.
+  @@index([userId, purpose, expiresAt])
+  @@map("step_up_grant")
 }
 
 /// A pending email change, awaiting confirmation at the NEW address.
@@ -577,29 +583,29 @@ model StepUpGrant {
 /// completes. Whoever holds the address today is the person who needs to hear
 /// about it while there is still time to object.
 model EmailChangeRequest {
-    id     String @id @default(uuid())
-    userId String
+  id     String @id @default(uuid())
+  userId String
 
-    /// Recorded so a notification can say what it is changing FROM, and so the
-    /// audit trail survives the user row being updated.
-    oldEmail String
-    newEmail String
+  /// Recorded so a notification can say what it is changing FROM, and so the
+  /// audit trail survives the user row being updated.
+  oldEmail String
+  newEmail String
 
-    /// SHA-256 of the confirmation token. The token itself is never stored: a
-    /// database read would otherwise hand over a working account-takeover link.
-    tokenHash String @unique
+  /// SHA-256 of the confirmation token. The token itself is never stored: a
+  /// database read would otherwise hand over a working account-takeover link.
+  tokenHash String @unique
 
-    expiresAt   DateTime
-    createdAt   DateTime  @default(now())
-    confirmedAt DateTime?
-    /// Set when the user follows the cancel link in the notification to the OLD
-    /// address. That link is the point of notifying them.
-    cancelledAt DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+  /// Set when the user follows the cancel link in the notification to the OLD
+  /// address. That link is the point of notifying them.
+  cancelledAt DateTime?
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId, expiresAt])
-    @@map("email_change_request")
+  @@index([userId, expiresAt])
+  @@map("email_change_request")
 }
 
 /// A pending invitation to an organization.
@@ -613,28 +619,28 @@ model EmailChangeRequest {
 /// security review found ("an admin invites a mailbox they control at a
 /// money-bearing role") has no path here.
 model Invitation {
-    id             String @id @default(uuid())
-    organizationId String
+  id             String @id @default(uuid())
+  organizationId String
 
-    /// Lower-cased, like every address we compare.
-    email String
-    role  String
+  /// Lower-cased, like every address we compare.
+  email String
+  role  String
 
-    /// SHA-256 of the acceptance token. Never the token: a database read must
-    /// not hand over a way into someone else's organization.
-    tokenHash String @unique
+  /// SHA-256 of the acceptance token. Never the token: a database read must
+  /// not hand over a way into someone else's organization.
+  tokenHash String @unique
 
-    invitedBy String
-    expiresAt DateTime
-    createdAt DateTime  @default(now())
-    acceptedAt DateTime?
-    revokedAt  DateTime?
+  invitedBy  String
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  acceptedAt DateTime?
+  revokedAt  DateTime?
 
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-    @@index([organizationId, email])
-    @@index([expiresAt])
-    @@map("invitation")
+  @@index([organizationId, email])
+  @@index([expiresAt])
+  @@map("invitation")
 }
 
 /// A second factor part-way through being set up.
@@ -647,25 +653,25 @@ model Invitation {
 ///
 /// Confirming moves it across. Nothing else does.
 model TwoFactorEnrolment {
-    id     String @id @default(uuid())
-    userId String @unique
+  id     String @id @default(uuid())
+  userId String @unique
 
-    /// Base32, as the authenticator app received it. Not yet live.
-    secret String
+  /// Base32, as the authenticator app received it. Not yet live.
+  secret String
 
-    /// Wrong codes on THIS enrolment. Bounded, because an attacker who can start
-    /// an enrolment could otherwise use the confirm endpoint as an oracle for a
-    /// secret they supplied — not useful here, but the bound costs nothing and
-    /// removes the question.
-    attempts Int @default(0)
+  /// Wrong codes on THIS enrolment. Bounded, because an attacker who can start
+  /// an enrolment could otherwise use the confirm endpoint as an oracle for a
+  /// secret they supplied — not useful here, but the bound costs nothing and
+  /// removes the question.
+  attempts Int @default(0)
 
-    expiresAt DateTime
-    createdAt DateTime @default(now())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([expiresAt])
-    @@map("two_factor_enrolment")
+  @@index([expiresAt])
+  @@map("two_factor_enrolment")
 }
 
 /// A single-use recovery code, hashed.
@@ -674,20 +680,20 @@ model TwoFactorEnrolment {
 /// hand over a way into every account. Shown to the user exactly once, at
 /// enrolment, because that is the only moment we can show them.
 model TwoFactorBackupCode {
-    id     String @id @default(uuid())
-    userId String
+  id     String @id @default(uuid())
+  userId String
 
-    /// SHA-256 of the code. Codes are high-entropy random values, so a plain
-    /// hash is adequate — unlike a password, there is nothing to guess.
-    codeHash String @unique
+  /// SHA-256 of the code. Codes are high-entropy random values, so a plain
+  /// hash is adequate — unlike a password, there is nothing to guess.
+  codeHash String @unique
 
-    usedAt DateTime?
-    createdAt DateTime @default(now())
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId, usedAt])
-    @@map("two_factor_backup_code")
+  @@index([userId, usedAt])
+  @@map("two_factor_backup_code")
 }
 
 // ===========================================================================
@@ -715,44 +721,44 @@ model TwoFactorBackupCode {
 /// the campaign; the same creator appears in many campaigns; and an amendment
 /// needs both parties' consent, which is only meaningful bilaterally.
 model Deal {
-    id             String @id @default(uuid())
-    organizationId String
-    campaignId     String
-    creatorUserId  String
+  id             String @id @default(uuid())
+  organizationId String
+  campaignId     String
+  creatorUserId  String
 
-    /// The agreed ceiling. `SUM(milestone.amountMinor)` must equal this, and
-    /// total released may never exceed it.
-    totalAmountMinor BigInt
-    currency         String @default("USD")
+  /// The agreed ceiling. `SUM(milestone.amountMinor)` must equal this, and
+  /// total released may never exceed it.
+  totalAmountMinor BigInt
+  currency         String @default("USD")
 
-    /// draft | offered | accepted | active | completed | cancelled | terminated
-    state String @default("draft")
+  /// draft | offered | accepted | active | completed | cancelled | terminated
+  state String @default("draft")
 
-    /// Optimistic concurrency. Every transition carries the version it read, and
-    /// `UNIQUE(dealId, fromVersion)` on the transition log makes two concurrent
-    /// writers from the same version impossible.
-    version Int @default(0)
+  /// Optimistic concurrency. Every transition carries the version it read, and
+  /// `UNIQUE(dealId, fromVersion)` on the transition log makes two concurrent
+  /// writers from the same version impossible.
+  version Int @default(0)
 
-    acceptedAt   DateTime?
-    completedAt  DateTime?
-    cancelledAt  DateTime?
-    createdAt    DateTime  @default(now())
+  acceptedAt  DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
 
-    campaign     Campaign            @relation(fields: [campaignId, organizationId], references: [id, organizationId], onDelete: Restrict)
-    creator      User                @relation(fields: [creatorUserId], references: [id], onDelete: Restrict)
-    agreements   AgreementVersion[]
-    deliverables Deliverable[]
-    transitions  DealTransition[]
+  campaign     Campaign           @relation(fields: [campaignId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  creator      User               @relation(fields: [creatorUserId], references: [id], onDelete: Restrict)
+  agreements   AgreementVersion[]
+  deliverables Deliverable[]
+  transitions  DealTransition[]
 
-    /// Carries organizationId so a deliverable cannot belong to a deal in
-    /// another org — the same composite-FK parentage used everywhere else.
-    @@unique([id, organizationId])
-    /// One live deal per creator per campaign. Two would make "what did we agree"
-    /// unanswerable, and both would independently bound the payout.
-    @@unique([campaignId, creatorUserId])
-    @@index([organizationId, state])
-    @@index([creatorUserId, state])
-    @@map("deal")
+  /// Carries organizationId so a deliverable cannot belong to a deal in
+  /// another org — the same composite-FK parentage used everywhere else.
+  @@unique([id, organizationId])
+  /// One live deal per creator per campaign. Two would make "what did we agree"
+  /// unanswerable, and both would independently bound the payout.
+  @@unique([campaignId, creatorUserId])
+  @@index([organizationId, state])
+  @@index([creatorUserId, state])
+  @@map("deal")
 }
 
 /// An immutable version of the agreed terms (SCD-2).
@@ -761,27 +767,27 @@ model Deal {
 /// both signatures, so "what did we agree, and when" is always answerable — and a
 /// brand cannot change the terms of work already delivered.
 model AgreementVersion {
-    id     String @id @default(uuid())
-    dealId String
-    /// 1, 2, 3… The live one is the highest with `acceptedAt` set.
-    version Int
+  id      String @id @default(uuid())
+  dealId  String
+  /// 1, 2, 3… The live one is the highest with `acceptedAt` set.
+  version Int
 
-    totalAmountMinor BigInt
+  totalAmountMinor BigInt
 
-    /// Both signatures. An amendment is not in force until both are present,
-    /// which is what makes it an agreement rather than an announcement.
-    brandAcceptedAt   DateTime?
-    brandAcceptedBy   String?
-    creatorAcceptedAt DateTime?
+  /// Both signatures. An amendment is not in force until both are present,
+  /// which is what makes it an agreement rather than an announcement.
+  brandAcceptedAt   DateTime?
+  brandAcceptedBy   String?
+  creatorAcceptedAt DateTime?
 
-    supersededAt DateTime?
-    createdAt    DateTime  @default(now())
+  supersededAt DateTime?
+  createdAt    DateTime  @default(now())
 
-    deal       Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
-    milestones Milestone[]
+  deal       Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
 
-    @@unique([dealId, version])
-    @@map("agreement_version")
+  @@unique([dealId, version])
+  @@map("agreement_version")
 }
 
 /// An amount plus a condition. The payment schedule.
@@ -791,44 +797,44 @@ model AgreementVersion {
 /// conflating the two is how "N videos approved" ends up meaning something nobody
 /// agreed to.
 model Milestone {
-    id                 String @id @default(uuid())
-    agreementVersionId String
-    dealId             String
+  id                 String @id @default(uuid())
+  agreementVersionId String
+  dealId             String
 
-    sequence Int
-    title    String
+  sequence Int
+  title    String
 
-    /// FROZEN at acceptance. A percentage is authoring input, never the
-    /// authoritative value — re-evaluating it at release time means amending a
-    /// deal total silently rewrites the amount of an ALREADY-RELEASED milestone.
-    amountMinor BigInt
+  /// FROZEN at acceptance. A percentage is authoring input, never the
+  /// authoritative value — re-evaluating it at release time means amending a
+  /// deal total silently rewrites the amount of an ALREADY-RELEASED milestone.
+  amountMinor BigInt
 
-    /// Kept for display and for authoring the next version only. Never read at
-    /// release time.
-    authoredBasisPoints Int?
+  /// Kept for display and for authoring the next version only. Never read at
+  /// release time.
+  authoredBasisPoints Int?
 
-    /// The condition, as a closed parameterized union. JSONB with a generated
-    /// `condition_type` column under CHECK, so an unknown type is rejected by the
-    /// storage engine rather than by whichever code path happens to parse it.
-    condition Json
+  /// The condition, as a closed parameterized union. JSONB with a generated
+  /// `condition_type` column under CHECK, so an unknown type is rejected by the
+  /// storage engine rather than by whichever code path happens to parse it.
+  condition Json
 
-    /// GENERATED ALWAYS from `condition->>'type'`. Written by Postgres, never by
-    /// application code. Declared here only so Prisma knows it exists.
-    conditionType String? @default(dbgenerated()) @map("condition_type")
+  /// GENERATED ALWAYS from `condition->>'type'`. Written by Postgres, never by
+  /// application code. Declared here only so Prisma knows it exists.
+  conditionType String? @default(dbgenerated()) @map("condition_type")
 
-    /// Set by the release step. `@unique` on the release row is the real
-    /// at-most-once guarantee; this is the denormalised read.
-    releasedAt    DateTime?
-    ledgerEntryId String?
+  /// Set by the release step. `@unique` on the release row is the real
+  /// at-most-once guarantee; this is the denormalised read.
+  releasedAt    DateTime?
+  ledgerEntryId String?
 
-    agreementVersion AgreementVersion @relation(fields: [agreementVersionId], references: [id], onDelete: Cascade)
+  agreementVersion AgreementVersion @relation(fields: [agreementVersionId], references: [id], onDelete: Cascade)
 
-    @@unique([agreementVersionId, sequence])
-    @@index([dealId, releasedAt])
-    /// On the generated column, so "which milestones use condition X" is
-    /// answerable without scanning every JSONB blob.
-    @@index([conditionType], map: "milestone_condition_type_idx")
-    @@map("milestone")
+  @@unique([agreementVersionId, sequence])
+  @@index([dealId, releasedAt])
+  /// On the generated column, so "which milestones use condition X" is
+  /// answerable without scanning every JSONB blob.
+  @@index([conditionType], map: "milestone_condition_type_idx")
+  @@map("milestone")
 }
 
 /// One slot the brand bought. "Video 3 of 20."
@@ -837,27 +843,28 @@ model Milestone {
 /// deliverable with two approved versions would otherwise count twice and fire a
 /// milestone early, which is a silent overpay.
 model Deliverable {
-    id     String @id @default(uuid())
-    dealId String
+  id     String @id @default(uuid())
+  dealId String
 
-    sequence Int
-    /// video | reel | image | carousel | story
-    kind     String @default("video")
-    brief    String?
+  sequence Int
+  /// video | reel | image | carousel | story
+  kind     String  @default("video")
+  brief    String?
 
-    /// pending | submitted | in_review | changes_requested | approved | cancelled
-    state   String @default("pending")
-    version Int    @default(0)
+  /// pending | submitted | in_review | changes_requested | approved | cancelled
+  state   String @default("pending")
+  version Int    @default(0)
 
-    approvedAt DateTime?
-    createdAt  DateTime  @default(now())
+  approvedAt DateTime?
+  dueAt      DateTime?
+  createdAt  DateTime  @default(now())
 
-    deal        Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
-    submissions Submission[]
+  deal        Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  submissions Submission[]
 
-    @@unique([dealId, sequence])
-    @@index([dealId, state])
-    @@map("deliverable")
+  @@unique([dealId, sequence])
+  @@index([dealId, state])
+  @@map("deliverable")
 }
 
 /// One immutable attempt at filling a deliverable.
@@ -866,24 +873,24 @@ model Deliverable {
 /// anchors here rather than to the deliverable, because a dispute must be able to
 /// show attempt 1, what was said about it, and attempt 2 side by side.
 model Submission {
-    id            String @id @default(uuid())
-    deliverableId String
+  id            String @id @default(uuid())
+  deliverableId String
 
-    /// 1, 2, 3… Monotonic per deliverable.
-    version Int
+  /// 1, 2, 3… Monotonic per deliverable.
+  version Int
 
-    /// Where the ORIGINAL lives. Never served to anyone: originals are evidence,
-    /// and only derived renditions are served. See docs/01-product.md.
-    assetKey String?
-    caption  String?
+  /// Where the ORIGINAL lives. Never served to anyone: originals are evidence,
+  /// and only derived renditions are served. See docs/01-product.md.
+  assetKey String?
+  caption  String?
 
-    submittedAt DateTime @default(now())
+  submittedAt DateTime @default(now())
 
-    deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
-    reviews     Review[]
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  reviews     Review[]
 
-    @@unique([deliverableId, version])
-    @@map("submission")
+  @@unique([deliverableId, version])
+  @@map("submission")
 }
 
 /// A decision on one submission version.
@@ -893,36 +900,36 @@ model Submission {
 /// work the same way: an undo that deleted the row would be impossible to perform
 /// and would erase the fact that a decision was made at all.
 model Review {
-    id           String @id @default(uuid())
-    submissionId String
-    /// Denormalised so the partial unique index below can be per-deliverable.
-    deliverableId String
+  id            String @id @default(uuid())
+  submissionId  String
+  /// Denormalised so the partial unique index below can be per-deliverable.
+  deliverableId String
 
-    /// APPROVED | CHANGES_REQUESTED | REJECTED
-    decision String
+  /// APPROVED | CHANGES_REQUESTED | REJECTED
+  decision String
 
-    /// HUMAN | SYSTEM_AUTO. The hard-deadline worker goes through the IDENTICAL
-    /// approve path with SYSTEM_AUTO rather than force-approving the deliverable
-    /// — a second release path that skipped this row would bypass the one index
-    /// that prevents double-pay.
-    actorKind   String  @default("HUMAN")
-    actorUserId String?
+  /// HUMAN | SYSTEM_AUTO. The hard-deadline worker goes through the IDENTICAL
+  /// approve path with SYSTEM_AUTO rather than force-approving the deliverable
+  /// — a second release path that skipped this row would bypass the one index
+  /// that prevents double-pay.
+  actorKind   String  @default("HUMAN")
+  actorUserId String?
 
-    comment String?
-    /// S3 key of a voice note. Brands review faster by talking than typing.
-    voiceKey String?
+  comment  String?
+  /// S3 key of a voice note. Brands review faster by talking than typing.
+  voiceKey String?
 
-    /// Set by undo. The partial unique index ignores voided rows, so undoing
-    /// frees the deliverable to be decided again.
-    voidedAt DateTime?
-    voidedBy String?
+  /// Set by undo. The partial unique index ignores voided rows, so undoing
+  /// frees the deliverable to be decided again.
+  voidedAt DateTime?
+  voidedBy String?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
-    @@index([deliverableId, decision, voidedAt])
-    @@map("review")
+  @@index([deliverableId, decision, voidedAt])
+  @@map("review")
 }
 
 /// The transition log. `UNIQUE(dealId, fromVersion)` is the concurrency control.
@@ -931,22 +938,22 @@ model Review {
 /// unique index. A naive `UNIQUE(dealId, toState)` would instead break legitimate
 /// resubmission after rejection, which is an ordinary and expected path.
 model DealTransition {
-    id     String @id @default(uuid())
-    dealId String
+  id     String @id @default(uuid())
+  dealId String
 
-    fromState   String
-    toState     String
-    fromVersion Int
+  fromState   String
+  toState     String
+  fromVersion Int
 
-    actorUserId String?
-    reason      String?
-    createdAt   DateTime @default(now())
+  actorUserId String?
+  reason      String?
+  createdAt   DateTime @default(now())
 
-    deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
-    @@unique([dealId, fromVersion])
-    @@index([dealId, createdAt])
-    @@map("deal_transition")
+  @@unique([dealId, fromVersion])
+  @@index([dealId, createdAt])
+  @@map("deal_transition")
 }
 
 /// Platform-wide figures, computed by the WORKER and read by the admin surface.
@@ -963,29 +970,179 @@ model DealTransition {
 /// number that is four minutes old and correct beats one that is live and
 /// sometimes times out.
 model PlatformSnapshot {
-    /// Singleton, like `cluster_identity`. A second row would be a second answer
-    /// to "how is the platform doing", and nobody would know which was current.
-    onlyRow Boolean @id @default(true)
+  /// Singleton, like `cluster_identity`. A second row would be a second answer
+  /// to "how is the platform doing", and nobody would know which was current.
+  onlyRow Boolean @id @default(true)
 
-    brandCount      Int
-    creatorCount    Int
-    activeDealCount Int
-    pendingReviews  Int
+  brandCount      Int
+  creatorCount    Int
+  activeDealCount Int
+  pendingReviews  Int
 
-    /// Money that has actually moved to creators.
-    releasedToCreatorsMinor BigInt
-    /// Brands' money sitting at Stripe. NOT revenue, and never added to it.
-    fundsUnderManagementMinor BigInt
-    /// What Rayi has actually earned in fees.
-    platformRevenueMinor BigInt
+  /// Money that has actually moved to creators.
+  releasedToCreatorsMinor   BigInt
+  /// Brands' money sitting at Stripe. NOT revenue, and never added to it.
+  fundsUnderManagementMinor BigInt
+  /// What Rayi has actually earned in fees.
+  platformRevenueMinor      BigInt
 
-    /// Ledger health. Every one of these must be zero or empty.
-    unbalancedEntryIds String[]
-    driftedAccountIds  String[]
-    auditChainBreaks   Json     @default("[]")
-    failedCommandCount Int      @default(0)
+  /// Ledger health. Every one of these must be zero or empty.
+  unbalancedEntryIds String[]
+  driftedAccountIds  String[]
+  auditChainBreaks   Json     @default("[]")
+  failedCommandCount Int      @default(0)
 
-    computedAt DateTime @default(now())
+  computedAt DateTime @default(now())
 
-    @@map("platform_snapshot")
+  @@map("platform_snapshot")
+}
+
+/// A finance-approved spending CEILING for a workspace.
+///
+/// **Not a ledger account.** This reconciles "each workspace has its own budget"
+/// with "workspaces hold no money" — the two sentences are about different
+/// objects. Campaigns still allocate from the ORGANIZATION balance; this decides
+/// whether a given allocation is permitted at all.
+///
+/// The invariant is a database CHECK, not application logic:
+/// `committed_minor <= ceiling_minor`. Draw-down is a conditional UPDATE so two
+/// concurrent allocations cannot both read the same remaining figure and both
+/// pass. Exactly the same shape as the ledger's `balance_minor >= 0`: an
+/// over-commit is a storage-engine error rather than a race somebody has to
+/// remember to guard.
+///
+/// Hitting the ceiling hard-blocks NEW allocations and leaves committed deals
+/// running. A creator who already accepted a deal must never discover their
+/// milestone cannot pay because somebody else exhausted an envelope.
+model BudgetEnvelope {
+  id             String @id @default(uuid())
+  workspaceId    String @unique
+  organizationId String
+
+  ceilingMinor   BigInt
+  /// Drawn down by allocation, never written directly by a controller.
+  committedMinor BigInt @default(0)
+  currency       String @default("USD")
+
+  /// An expired envelope behaves exactly like an exhausted one: new
+  /// allocations refused, committed deals unaffected.
+  expiresAt DateTime?
+
+  /// Who approved it. Kept even after they leave, because "who authorised this
+  /// spending" is the question an audit actually asks.
+  approvedByMemberId String?
+  approvedAt         DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  /// Composite FK so an envelope cannot be attached to a workspace in another
+  /// organization — the same parentage trick used throughout.
+  workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// The pair, not just `workspaceId`, so the composite FK can define a
+  /// one-to-one. It also states the real invariant: at most one envelope per
+  /// workspace per organization, and a workspace belongs to exactly one.
+  @@unique([workspaceId, organizationId])
+  @@index([organizationId])
+  @@map("budget_envelope")
+}
+
+/// Where a creator's money goes.
+///
+/// **No account number is stored here, and there must never be one.** Rayi never
+/// accepts bank details: binding a destination routes through the payment
+/// provider's own onboarding, so the provider's identity checks are the second
+/// factor and the only thing that comes back is a reference plus the last four
+/// digits.
+///
+/// `holdUntil` is the recovery window. Every change pauses payouts for 72 hours
+/// and notifies the OLD contact details, because this population is passwordless,
+/// often has no second factor, and US carriers reassign numbers after about 45
+/// days — so a hijacked session must not be able to silently redirect an income.
+model PayoutDestination {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  /// The provider's connected-account reference. Never a token a client could
+  /// replay, and never anything that identifies an account by itself.
+  connectedAccountId String?
+  bankName           String?
+  last4              String?
+
+  /// From the PROVIDER, never inferred from "they finished the form".
+  /// Onboarding can complete while verification is outstanding, and telling a
+  /// creator they are ready to be paid when they are not is the worst lie
+  /// available on that screen.
+  payoutsEnabled      Boolean @default(false)
+  /// The provider's outstanding requirements, verbatim, so support can act.
+  pendingRequirements Json    @default("[]")
+
+  holdUntil     DateTime?
+  lastChangedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([holdUntil])
+  @@map("payout_destination")
+}
+
+/// One batched payment to one creator.
+///
+/// Payouts are weekly and batched so a creator sees one arrival rather than one
+/// per milestone. `expectedArrivalAt` is an ESTIMATE from the provider and is
+/// labelled as one everywhere it is shown — "Paid out Friday. Always." is a
+/// sentence the product cannot keep, and the one time it is wrong is the time
+/// somebody has rent due.
+model Payout {
+  id     String @id @default(uuid())
+  userId String
+
+  amountMinor BigInt
+  currency    String @default("USD")
+
+  /// scheduled | in_transit | paid | failed | held | cancelled
+  state String @default("scheduled")
+
+  batchId String?
+
+  expectedArrivalAt DateTime?
+  paidAt            DateTime?
+  /// Written FOR the creator, not for us. A status code is a support ticket;
+  /// a sentence explaining a bank-details change is a person who can act.
+  reason            String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sources PayoutSource[]
+
+  @@index([userId, createdAt])
+  @@index([state])
+  @@index([batchId])
+  @@map("payout")
+}
+
+/// Which released milestone fed which payout.
+///
+/// Exists so a creator can reconcile a batched arrival themselves. Without it,
+/// "why is this $625 and not $900" is a support conversation rather than a line
+/// on a screen.
+model PayoutSource {
+  id       String @id @default(uuid())
+  payoutId String
+
+  dealId         String
+  milestoneId    String
+  milestoneTitle String
+  brandName      String
+  amountMinor    BigInt
+
+  payout Payout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+
+  /// One payout line per milestone. A milestone paid into two payouts would
+  /// mean the same money counted twice on the creator's own screen.
+  @@unique([payoutId, milestoneId])
+  @@index([dealId])
+  @@map("payout_source")
 }

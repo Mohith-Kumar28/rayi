@@ -148,6 +148,11 @@ export const STEP_UP_PURPOSES = [
   'member:remove',
   'money_authority:grant',
   'funds:release',
+  'budget:approve',
+  'deal:offer',
+  'deal:terminate',
+  'org:update',
+  'payout_destination:change',
 ] as const;
 
 export const StartStepUpBodySchema = z.object({

@@ -198,15 +198,15 @@ export function AdminOpsScreen() {
                       <span className="font-mono text-xs text-ink">{delivery.eventType}</span>
                       <StatusPill value={delivery.state} vocabulary={WEBHOOK_STATE} />
                       {/*
-                        A failed signature is shown rather than dropped. A burst
-                        of them is either a rotated secret or somebody probing,
-                        and both are things to see rather than infer from silence.
+                        There is no signature badge, deliberately.
+                        
+                        A delivery whose signature does not verify is refused at
+                        the edge and never becomes a row, so a flag here could
+                        only ever read "valid" — and a badge that is always the
+                        same teaches an operator to stop seeing it. The
+                        burst-of-failures signal belongs in a rate alarm on the
+                        rejecting handler, not in a list of things we accepted.
                       */}
-                      {!delivery.signatureValid && (
-                        <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                          signature failed
-                        </span>
-                      )}
                     </div>
                     <div className="mt-0.5 text-xs text-muted">
                       {delivery.source.replace(/_/g, ' ')} · {timeAgo(delivery.receivedAt)}

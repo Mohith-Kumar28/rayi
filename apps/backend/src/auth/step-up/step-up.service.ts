@@ -57,6 +57,17 @@ export const StepUpPurpose = {
   RemoveMember: 'member:remove',
   GrantMoneyAuthority: 'money_authority:grant',
   ReleaseFunds: 'funds:release',
+  /// Approving a spending ceiling. Moves no money; decides what future
+  /// allocations are permitted to do.
+  ApproveBudget: 'budget:approve',
+  /// Offering a deal commits money against the campaign, and an advance leaves
+  /// the moment the creator accepts.
+  OfferDeal: 'deal:offer',
+  TerminateDeal: 'deal:terminate',
+  UpdateOrganization: 'org:update',
+  /// The most dangerous action a creator can take, and the one their weakest
+  /// authentication protects.
+  ChangePayoutDestination: 'payout_destination:change',
 } as const;
 
 export type StepUpPurpose = (typeof StepUpPurpose)[keyof typeof StepUpPurpose];

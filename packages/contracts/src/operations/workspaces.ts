@@ -189,7 +189,7 @@ export const setBudgetEnvelope = defineOperation({
     'back, it would only make the stored numbers disagree with the deals already running. ' +
     'Lowering a ceiling stops new allocations; it does not touch committed ones.',
   tags: ['workspaces'],
-  access: { kind: 'permission', permission: 'budget:approve', stepUp: true },
+  access: { kind: 'permission', permission: 'envelope:approve', stepUp: true },
   pathParams: WorkspaceParams,
   body: SetBudgetEnvelopeBodySchema,
   successStatus: 200,

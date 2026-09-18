@@ -47,6 +47,29 @@ export const AuditAction = {
   DeliverableSubmitted: 'deliverable.submitted',
   MilestoneSatisfied: 'milestone.satisfied',
 
+  // Workspaces and budgets. A ceiling is an authorization decision, so who
+  // raised it and when is exactly what an audit is asked for.
+  WorkspaceCreated: 'workspace.created',
+  WorkspaceUpdated: 'workspace.updated',
+  WorkspaceMemberAdded: 'workspace.member_added',
+  WorkspaceMemberRemoved: 'workspace.member_removed',
+  BudgetEnvelopeApproved: 'budget_envelope.approved',
+
+  // Campaigns and deals
+  CampaignCreated: 'campaign.created',
+  CampaignUpdated: 'campaign.updated',
+  DealCreated: 'deal.created',
+  DealOffered: 'deal.offered',
+  DealTerminated: 'deal.terminated',
+
+  // Organization
+  OrganizationUpdated: 'organization.updated',
+  InvitationRevoked: 'invitation.revoked',
+
+  // Creator money. Binding a payout destination is a money action, not a
+  // setting, and is logged as one.
+  PayoutDestinationChangeStarted: 'payout_destination.change_started',
+
   // Membership
   MemberInvited: 'member.invited',
   MemberRoleChanged: 'member.role_changed',
@@ -147,6 +170,23 @@ export const AUDIT_ACTION_COPY: Record<AuditAction, string> = {
   [AuditAction.DeliverableChangesRequested]: 'Changes were requested on a video',
   [AuditAction.DeliverableSubmitted]: 'A video was submitted',
   [AuditAction.MilestoneSatisfied]: 'A payment milestone was met',
+
+  [AuditAction.WorkspaceCreated]: 'A workspace was created',
+  [AuditAction.WorkspaceUpdated]: 'A workspace was renamed',
+  [AuditAction.WorkspaceMemberAdded]: 'Someone was given access to a workspace',
+  [AuditAction.WorkspaceMemberRemoved]: 'Someone lost access to a workspace',
+  [AuditAction.BudgetEnvelopeApproved]: 'A workspace spending ceiling was approved',
+
+  [AuditAction.CampaignCreated]: 'A campaign was created',
+  [AuditAction.CampaignUpdated]: 'A campaign was updated',
+  [AuditAction.DealCreated]: 'A deal was drafted',
+  [AuditAction.DealOffered]: 'A deal was offered to a creator',
+  [AuditAction.DealTerminated]: 'A deal was ended early',
+
+  [AuditAction.OrganizationUpdated]: 'The organization was updated',
+  [AuditAction.InvitationRevoked]: 'An invitation was revoked',
+
+  [AuditAction.PayoutDestinationChangeStarted]: 'A payout destination change was started',
 
   [AuditAction.MemberInvited]: 'Someone was invited to the team',
   [AuditAction.MemberRoleChanged]: "Someone's role was changed",

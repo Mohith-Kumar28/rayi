@@ -57,7 +57,16 @@ export const MilestoneConditionSchema = z.discriminatedUnion('type', [
     deliverableIds: z.array(z.uuid()).min(1),
   }),
   z.object({ type: z.literal('ALL_DELIVERABLES_APPROVED') }),
-  z.object({ type: z.literal('DATE_REACHED'), date: z.iso.datetime() }),
+  /*
+   * `at`, not `date` — the field name the DOMAIN evaluates.
+   *
+   * These two drifted once: the contract said `date` while
+   * `evaluateCondition` read `at`, so a dated milestone would have read
+   * `undefined` and never satisfied — and a past-dated advance would have
+   * slipped past the disclosure. `condition-parity.test.ts` now asserts the two
+   * unions agree, field by field.
+   */
+  z.object({ type: z.literal('DATE_REACHED'), at: z.iso.datetime() }),
   z
     .object({ type: z.literal('MANUAL_BRAND_APPROVAL') })
     .describe(

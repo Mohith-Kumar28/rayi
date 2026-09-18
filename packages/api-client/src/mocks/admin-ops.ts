@@ -147,7 +147,6 @@ const WEBHOOKS = [
     deliveryId: '77777777-7777-4777-8777-777777777f01',
     source: 'stripe_connect' as const,
     eventType: 'account.updated',
-    signatureValid: true,
     state: 'processed' as const,
     receivedAt: '2026-09-18T07:22:00.000Z',
     processedAt: '2026-09-18T07:22:01.000Z',
@@ -159,7 +158,6 @@ const WEBHOOKS = [
     deliveryId: '77777777-7777-4777-8777-777777777f02',
     source: 'stripe_platform' as const,
     eventType: 'charge.dispute.created',
-    signatureValid: true,
     state: 'received' as const,
     receivedAt: '2026-09-18T05:40:00.000Z',
     processedAt: null,
@@ -167,26 +165,21 @@ const WEBHOOKS = [
   },
   {
     /*
-     * Signature failed.
-     *
-     * Stored and shown rather than dropped: a burst of these is either a
-     * rotated secret or somebody probing, and an operator has to see it rather
-     * than infer it from silence.
+     * A delivery that was accepted and then failed to PROCESS — not a signature
+     * failure. Those are refused at the edge and never become rows.
      */
     deliveryId: '77777777-7777-4777-8777-777777777f03',
     source: 'stripe_platform' as const,
-    eventType: 'unknown',
-    signatureValid: false,
+    eventType: 'payout.failed',
     state: 'failed' as const,
     receivedAt: '2026-09-18T04:12:00.000Z',
     processedAt: null,
-    lastError: 'Signature did not verify over the raw body.',
+    lastError: 'No connected account matches the destination on this payout.',
   },
   {
     deliveryId: '77777777-7777-4777-8777-777777777f04',
     source: 'resend' as const,
     eventType: 'email.bounced',
-    signatureValid: true,
     state: 'processed' as const,
     receivedAt: '2026-09-17T19:55:00.000Z',
     processedAt: '2026-09-17T19:55:00.000Z',

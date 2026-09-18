@@ -281,14 +281,16 @@ export const WebhookDeliverySchema = z.object({
   deliveryId: z.uuid(),
   source: z.enum(['stripe_platform', 'stripe_connect', 'resend']),
   eventType: z.string(),
-  /**
-   * Whether the signature verified over the RAW bytes.
+  /*
+   * There is deliberately no `signatureValid` field.
    *
-   * A delivery that fails this is stored and shown rather than dropped: a burst
-   * of signature failures is either a rotated secret or somebody probing, and
-   * both are things an operator needs to see rather than infer from silence.
+   * A delivery whose signature does not verify over the raw bytes is refused at
+   * the edge and never becomes a row, so a flag here could only ever read
+   * `true` — a field that is constant is a field that teaches an operator to
+   * ignore it. The burst-of-failures signal that matters is a rate on the
+   * rejecting handler, which belongs in metrics and an alarm rather than in a
+   * list of things that were accepted.
    */
-  signatureValid: z.boolean(),
   state: z.enum(['received', 'processed', 'failed', 'ignored']),
   receivedAt: z.iso.datetime(),
   processedAt: z.iso.datetime().nullable(),
