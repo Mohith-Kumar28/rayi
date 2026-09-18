@@ -14,7 +14,8 @@ rayi/
 │   │   │   ├── app.module.ts  .common() / .api() / .worker() / .main()
 │   │   │   ├── api/           feature modules: health, user, file, funding
 │   │   │   ├── architecture/  boundary rules asserted as tests
-│   │   │   ├── auth/          Better Auth integration + AuthGuard
+│   │   │   ├── audit/         hash-chained append-only log (global module)
+│   │   │   ├── auth/          Better Auth integration, AuthGuard, route allowlist
 │   │   │   ├── authorization/ PermissionService — roles AND money authority
 │   │   │   ├── common/        stateless DTOs and types
 │   │   │   ├── config/        one registerAs namespace per concern
@@ -150,6 +151,48 @@ requests authorised against whichever org they last switched to.
 
 A caller who is not a member gets **404, not 403**. A 403 confirms the organization exists, which
 turns every tenant route into an enumeration oracle.
+
+## Three access kinds, and what each one does NOT say
+
+Every `@Operation()` route declares one. There is no "access not declared" state — that is what makes
+forgetting one a type error rather than an accidentally open endpoint.
+
+| Kind | The guard checks | The guard **cannot** check |
+| --- | --- | --- |
+| `public` | nothing | — |
+| `self` | you are signed in | whether the row you asked for is yours |
+| `permission` | you could hold this permission somewhere in the org in the URL | whether you hold it for *this* resource, or for this amount |
+
+`self` is deliberately its own kind rather than a permission over a synthetic "self" resource. Every
+permission-gated route carries `{orgId}` and is evaluated against an organization; an account route
+has no organization, and inventing one would mean authorising a request against something unrelated
+to what it touches.
+
+The consequence is a rule the guard cannot enforce: **a `self` handler must scope every query by the
+session's user id in the WHERE clause.** So it is asserted by test instead — `account-http` checks
+that another user's session id returns 404 and is not revoked. A session id is not a secret; it
+appears in its owner's own list.
+
+## The audit log
+
+Append-only by `REVOKE` and triggers; **tamper-evident** by a SHA-256 chain over `prev_hash`. Those
+stop different attackers — the triggers stop the application, the chain stops whoever gets past the
+triggers, which is the migrator role, a direct `psql` session, or an insider.
+
+Its own schema with its own grants, like the ledger, because the interesting question is not "can
+this code write an audit row" but "can this code *unwrite* one". `audit.record` is SECURITY DEFINER
+and computes the hash itself, so no role — including `rayi_api`, which legitimately writes here —
+can choose what the chain says. There is no INSERT grant on the table at all.
+
+`record()` never throws. An audit write that failed must not roll back the action it was recording:
+refusing to revoke a session because the log was unavailable turns an observability outage into a
+security one, at exactly the moment someone is evicting an attacker. `recordInTransaction()` is the
+opposite, for the few actions where an unrecorded change is worse than no change.
+
+**What it cannot see:** a deleted suffix. Remove the newest rows and the remaining prefix verifies
+perfectly, because no log can prove from inside itself that it has not been truncated. `audit.head()`
+returns the tip for publishing somewhere the database role cannot write — that anchor, not the chain,
+is what makes truncation visible.
 
 ## The contract pipeline
 

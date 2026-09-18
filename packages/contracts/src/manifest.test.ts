@@ -22,7 +22,10 @@ describe('every operation declares its access', () => {
       if (operation.access.kind === 'permission') {
         expect(operation.access.permission).toMatch(/^[a-z][a-z-]*:[a-z][a-z-]*$/);
       } else {
-        expect(operation.access.kind).toBe('public');
+        // Anything that is not permission-gated must say so explicitly. There is
+        // no "no access declared" state, which is what makes forgetting one a
+        // type error rather than an accidentally open endpoint.
+        expect(['public', 'self']).toContain(operation.access.kind);
       }
     },
   );
@@ -57,6 +60,15 @@ describe('path parameters are declared, not implied', () => {
       }
     },
   );
+
+  it('never gives a self-scoped route an orgId, because it has no tenant', () => {
+    // A `self` route authorised against an organization would be authorised
+    // against something that has nothing to do with the resource.
+    for (const operation of ALL_OPERATIONS) {
+      if (operation.access.kind !== 'self') continue;
+      expect(operation.path).not.toContain('{orgId}');
+    }
+  });
 
   it('scopes every tenant route by an explicit orgId in the path', () => {
     // Scope must come from the URL, never from session.activeOrganizationId: that

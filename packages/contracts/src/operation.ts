@@ -30,6 +30,21 @@ export type HttpMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
  */
 export type Access =
   | { readonly kind: 'public' }
+  /**
+   * Authenticated, acting on YOURSELF. No tenant scope, because the resource is
+   * the caller.
+   *
+   * Deliberately its own kind rather than a permission over a synthetic "self"
+   * resource. Every permission-gated route carries `{orgId}` and is checked
+   * against an organization; an account route has no organization, and forcing
+   * one would mean inventing a scope that does not exist — which is how a route
+   * ends up authorised against the wrong thing.
+   *
+   * The handler still scopes every query by the session's user id in the WHERE
+   * clause. `self` says "you must be signed in"; it does not say "and therefore
+   * the row you asked for is yours".
+   */
+  | { readonly kind: 'self'; readonly stepUp?: boolean }
   | {
       readonly kind: 'permission';
       /** e.g. `campaign:allocate`. Resolved against Rayi's own role_permission table. */

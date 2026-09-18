@@ -74,7 +74,15 @@ Project skills in `.claude/skills/` load automatically when relevant:
    boundary rule, every ledger constraint and every allowlist entry has a test that deliberately
    breaks it and asserts the alarm fires. Adding a control without that test is adding decoration.
 
-9. **Better Auth serves before Nest's guards run.** Its mount is deny-by-default
+9. **Every state-changing action writes an audit row.** `AuditService.record()` never throws — an
+   audit failure must not roll back the action it was recording. Use `recordInTransaction()` only
+   where an unrecorded change is worse than no change (money capability, role changes).
+
+10. **A `self` route's handler must scope every query by the session's user id in the WHERE clause.**
+    The guard only checks that you are signed in; it cannot know whether a row is yours. There is no
+    `userId` parameter on any account route, and there must never be one.
+
+11. **Better Auth serves before Nest's guards run.** Its mount is deny-by-default
    (`src/auth/auth-route-allowlist.ts`): 10 endpoints open, the other 32 return 404, and
    `pnpm verify:auth-surface` fails CI if an upgrade changes the set. Never widen it without
    deciding, in `BLOCKED_AUTH_ROUTES`, why the endpoint was closed.
@@ -85,7 +93,7 @@ Project skills in `.claude/skills/` load automatically when relevant:
 
 ```bash
 pnpm check                              # OpenAPI drift gate + typecheck + all tests + module boundaries
-pnpm check:db                           # migrations + the 84 integration tests (needs DATABASE_URL)
+pnpm check:db                           # migrations + the 114 integration tests (needs DATABASE_URL)
 pnpm contracts                          # regenerate openapi.json and the typed client
 pnpm --filter @rayi/backend depcruise   # module boundary enforcement
 pnpm --filter @rayi/console dev         # the SPA against MSW mocks, no backend needed

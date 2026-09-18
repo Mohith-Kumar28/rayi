@@ -8,16 +8,16 @@ until step 16.
 Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
 Better Auth account endpoints that are currently blocked rather than replaced.
 
-Current test count: **317 passing**.
+Current test count: **358 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
 | `@rayi/domain` — Money, pure ledger logic | 36 | no |
-| `@rayi/contracts` — manifest invariants, OpenAPI shape | 15 | no |
+| `@rayi/contracts` — manifest invariants, OpenAPI shape | 26 | no |
 | `@rayi/api-client` — generated client + error envelope | 10 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
 | `@rayi/backend` unit — config, guards, **auth allowlist**, **architecture boundaries** | 142 | no |
-| `@rayi/backend` integration — ledger, **integrity**, authorization, treasury, HTTP, queue | **84** | **yes** |
+| `@rayi/backend` integration — ledger, integrity, **audit**, authorization, treasury, **account**, HTTP, queue | **114** | **yes** |
 
 Two gates run outside the test suites, both of which fail CI on drift:
 `pnpm verify:openapi` (the spec matches the manifest) and `pnpm verify:auth-surface`
@@ -194,8 +194,16 @@ the UI** — see technical debt.
       404. `emailAndPassword` disabled, and the password endpoints independently excluded
 - [x] **Committed surface snapshot** (`auth-surface.snapshot.json`, 42 endpoints) with
       `pnpm verify:auth-surface` failing CI when a version bump changes it
+- [x] **Hash-chained, append-only audit log** (`audit` schema) with `audit.record` as the only writer
+      and `audit.verify_chain` for tamper detection
+- [x] **Session management reimplemented as Nest routes** — list, revoke one, revoke others — each
+      scoped by the session's user id in the WHERE clause and each writing an audit row
+- [x] **Profile update reimplemented** with an explicit field allowlist
+- [x] `access: { kind: 'self' }` added to the manifest, so an account route declares its access
+      without inventing a tenant scope it does not have
 - [ ] Reimplement invite / role-change / member-removal as Nest controllers with audit + step-up
-      (they are currently *blocked*, not replaced — see below)
+- [ ] Email change with step-up and notification to the OLD address
+- [ ] Two-factor enrolment and removal behind step-up
 - [ ] Generate Better Auth's `ac` object from `role_permission` at boot with an equality assertion
 
 ### The mount was the hole, and it is closed
@@ -217,10 +225,63 @@ plugin set.
 in the snapshot appears in one list or the other — an endpoint nobody decided about is one nobody
 read.
 
-**Not yet replaced, only blocked:** `/update-user`, `/change-email`, `/two-factor/*` enrolment and
-session management have no Rayi equivalent yet. Users cannot currently change their email or manage
-their sessions at all. That is the right trade while the replacements are built — the endpoints
-being open was an escalation path — but it is a functional gap, not a finished feature.
+**Replaced so far:** session management (`GET /v1/me/sessions`, `DELETE /v1/me/sessions/{id}`,
+`POST /v1/me/sessions/revoke-others`), profile update (`PATCH /v1/me/profile`) and
+`GET /v1/me/activity`. Each is `access: { kind: 'self' }`, each scopes by the session's user id in
+the WHERE clause, and each writes an audit row — which is the entire justification for
+reimplementing rather than re-exposing.
+
+The scoping is the part under test. `self` means the guard only checks that you are signed in; it
+cannot answer *is this row yours*, because that is a question about a row it has not loaded. So
+`account-http.integration-spec.ts` asserts that another user's session id returns **404** and is not
+revoked — a session id is not a secret, it appears in its owner's own list, so revoking by id alone
+would let any signed-in user sign out any other.
+
+The profile allowlist matters for the same reason Better Auth's version was blocked: `/update-user`
+takes a partial user object, which is how `role`, `twoFactorEnabled` or `isEmailVerified` become
+writable by anyone holding a session. A test posts exactly that body and asserts nothing moved.
+
+**Still blocked, not replaced:** email change, two-factor enrolment and removal. Users cannot
+currently change their email address or manage their second factor. Both need step-up, which does
+not exist yet.
+
+### The audit log
+
+Append-only by `REVOKE` and triggers; **tamper-evident** by a SHA-256 chain. Those protect against
+different attackers — the triggers stop the application, the chain stops whoever gets past the
+triggers — so both are tested, and the chain is tested by disabling the trigger and editing a row.
+
+`audit.record` is SECURITY DEFINER and computes the hash itself, so no caller can choose what the
+chain says. `pg_advisory_xact_lock` serializes writers, because two inserts reading the same
+`prev_hash` fork the chain, and a forked chain verifies as broken forever after.
+
+`record()` deliberately **never throws**: an audit write that failed must not roll back the action it
+was recording. Refusing to revoke a session because the log was unavailable would turn an
+observability outage into a security one, at exactly the moment someone is evicting an attacker.
+`recordInTransaction()` is the opposite, for the small set of actions where an unrecorded change is
+worse than no change — granting money capability, changing a role.
+
+#### Two false-positive bugs found while building it
+
+Both were the same shape, and the dangerous one: **a tamper alarm that fires on honest data is one
+people learn to ignore, and they learn it long before the day it matters.**
+
+1. **`record` hashed its text arguments while `verify_chain` hashed the columns.** For every text
+   field those are identical. For `ip_address`, typed `inet`, they are not: `203.0.113.10` stores and
+   renders back as `203.0.113.10/32`. So every event carrying an IP — every security-relevant event —
+   verified as tampered. Fixed structurally: `record` materialises each value at its column's type
+   and hashes those, and both sides now call one shared `audit.event_hash`, because two copies of a
+   hash definition is exactly how this happened.
+2. **A gap in `seq` was treated as a deleted row.** `GENERATED ALWAYS AS IDENTITY` is *not* gapless —
+   a rolled-back transaction consumes a value and never returns it, because sequences are
+   deliberately non-transactional. So the alarm fired every time an ordinary request failed. Removed:
+   the chain already catches an interior deletion through the broken `prev_hash` link, with no false
+   positives at all.
+
+And one limitation stated rather than papered over: **a deleted suffix still verifies.** No log can
+prove from inside itself that it has not been truncated. `audit.head()` returns the current tip for
+publishing to storage the database role cannot write (S3 Object Lock, different account) — that is
+the only thing that makes truncation visible, and it is operational work for step 16.
 
 **Passwords are off.** `emailAndPassword: { enabled: false }` removes the precondition for
 GHSA-qq9h-g4jm-xgf3 globally. Sign-in is magic link plus TOTP. Note the seed script

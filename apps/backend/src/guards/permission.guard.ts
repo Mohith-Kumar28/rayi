@@ -45,6 +45,7 @@ import { OPERATION_ACCESS } from '@/decorators/operation.decorator';
 
 type AccessMetadata =
   | { kind: 'public' }
+  | { kind: 'self'; stepUp?: boolean }
   | {
       kind: 'permission';
       permission: string;
@@ -81,6 +82,18 @@ export class PermissionGuard implements CanActivate {
       case 'public':
         return true;
 
+      case 'self':
+        // Authenticated, acting on yourself. The guard's only job is to refuse
+        // an anonymous caller; it cannot say more, because "is this row yours"
+        // is a question about a row this guard has not loaded.
+        //
+        // The handler is therefore REQUIRED to scope every query by the
+        // session's user id in the WHERE clause. That is not a convention this
+        // guard can enforce, which is why it is written on the access kind
+        // itself in @rayi/contracts and why each account endpoint has a test
+        // asserting another user's resource returns 404.
+        return this.requireSession(context);
+
       case 'webhook':
         // Signature verification happens in the webhook module against the RAW
         // body. Reaching here means the route declared itself a webhook.
@@ -97,6 +110,18 @@ export class PermissionGuard implements CanActivate {
         throw new ForbiddenException('This endpoint is not available.');
       }
     }
+  }
+
+  /** Authentication only. Used by `self` routes, which have no tenant to check. */
+  private requireSession(context: ExecutionContext): boolean {
+    const request = context
+      .switchToHttp()
+      .getRequest<FastifyRequest & { session?: { user?: { id?: string } } }>();
+
+    if (!request.session?.user?.id) {
+      throw new UnauthorizedException('Sign in to continue.');
+    }
+    return true;
   }
 
   private async checkPermission(

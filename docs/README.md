@@ -18,7 +18,7 @@ can pick up without re-deriving anything.
 
 **Where the build is: steps 1–7 done, 8–16 to go.** The vertical slice is complete — a real HTTP
 request becomes a `treasury_command` row, and a worker picks it up and posts a balanced ledger entry,
-with no Stripe and no external money rail involved. 317 tests pass, 84 of them against a real
+with no Stripe and no external money rail involved. 358 tests pass, 114 of them against a real
 Postgres. Start at [Roadmap](06-roadmap.md) to see exactly what is and is not built.
 
 ## The shortest possible summary
@@ -56,6 +56,14 @@ Each of these cost real investigation. They are written up in full in the docs a
   concurrency test hid a real double-write defect through a green suite.
 - **`150.50 * 100` is not 15050 in every case** — `8.20 * 100` is `819.9999999999999`. Money never
   passes through a float, at any layer, including the browser.
+- **A tamper alarm that fires on honest data is worse than no alarm**, because people learn to ignore
+  it before the day it matters. Two were found and removed while building the audit log: hashing an
+  `inet` input vs. its stored form, and treating an IDENTITY sequence as gapless (it is not — a
+  rolled-back transaction consumes a value).
+- **A composite foreign key is only enforced when every column is non-null** (MATCH SIMPLE), so
+  parentage rules need a `CHECK` alongside.
+- **No log can prove from inside itself that it has not been truncated.** The hash chain catches an
+  interior deletion; only an externally-published head catches a deleted tail.
 
 ## Conventions
 

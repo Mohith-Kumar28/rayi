@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { ProblemSchema } from './errors.js';
-import type { OperationDefinition } from './operation.js';
+import type { Access, OperationDefinition } from './operation.js';
 
 /**
  * Emits an OpenAPI 3.1 document from the operation manifest.
@@ -91,6 +91,34 @@ function errorResponses(operation: OperationDefinition): JsonObject {
   return responses;
 }
 
+/**
+ * How an operation's access appears in the published document.
+ *
+ * Exhaustive by construction: the `never` assignment turns an unhandled access
+ * kind into a compile error. A default branch here would publish a new kind as
+ * whatever the fallback happened to say, and the OpenAPI document is what a
+ * partner or auditor reads to understand who can call what.
+ */
+function accessExtension(access: Access): JsonObject {
+  switch (access.kind) {
+    case 'public':
+      return { kind: 'public' };
+    case 'self':
+      return { kind: 'self', stepUp: access.stepUp ?? false };
+    case 'permission':
+      return {
+        kind: 'permission',
+        permission: access.permission,
+        stepUp: access.stepUp ?? false,
+        movesMoney: access.movesMoney ?? false,
+      };
+    default: {
+      const exhaustive: never = access;
+      throw new Error(`Unhandled access kind: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+}
+
 export function buildOpenApiDocument(
   operations: readonly OperationDefinition[],
   info: OpenApiInfo,
@@ -121,15 +149,11 @@ export function buildOpenApiDocument(
       },
       // Surfaced in the document so a reviewer can read the authorization model
       // without opening a controller.
-      'x-rayi-access':
-        operation.access.kind === 'public'
-          ? { kind: 'public' }
-          : {
-              kind: 'permission',
-              permission: operation.access.permission,
-              stepUp: operation.access.stepUp ?? false,
-              movesMoney: operation.access.movesMoney ?? false,
-            },
+      //
+      // Switched exhaustively rather than defaulted: a future access kind that
+      // is not handled here becomes a compile error, instead of being silently
+      // published as whatever the fallback branch said.
+      'x-rayi-access': accessExtension(operation.access),
       ...(operation.access.kind === 'public' ? { security: [] } : {}),
     };
 
