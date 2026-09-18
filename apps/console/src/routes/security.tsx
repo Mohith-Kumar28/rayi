@@ -104,7 +104,7 @@ function Sessions() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm text-ink">
-                  {session.userAgent ?? 'Unknown device'}
+                  {describeDevice(session.userAgent)}
                 </span>
                 {session.current && (
                   // Marked, not hidden. The list is useless if you cannot tell
@@ -242,7 +242,11 @@ function Activity() {
     <ul className="divide-y divide-hair overflow-hidden rounded-lg border border-hair">
       {activity.data.events.map((event) => (
         <li key={event.id} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
-          <span className="font-mono text-xs text-ink">{event.action}</span>
+          {/* The sentence, not the key. The key stays in `title` so it can
+              still be copied into a support thread or a log search. */}
+          <span className="text-sm text-ink" title={event.action}>
+            {event.label}
+          </span>
           <span className="shrink-0 text-xs text-muted">
             {event.ipAddress ?? '—'} ·{' '}
             {new Date(event.occurredAt).toLocaleString('en-US', {
@@ -256,6 +260,44 @@ function Activity() {
       ))}
     </ul>
   );
+}
+
+/**
+ * A user-agent string as a person would describe their own device.
+ *
+ * This list exists so someone spots a session they do not recognise, and
+ * "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/141.0.0.0 Safa…"
+ * truncated in a table is not something anybody recognises or fails to
+ * recognise. Legibility here IS the control.
+ *
+ * Deliberately crude, and derived from the UA itself rather than looked up in a
+ * table the server owns: it is a summary of a string we were handed, so there
+ * is nothing for it to drift against, and an unrecognised agent falls through
+ * to "Unknown device" rather than to a confident wrong answer.
+ */
+export function describeDevice(userAgent: string | null): string {
+  if (!userAgent) return 'Unknown device';
+
+  const browser =
+    /\bEdg\//.test(userAgent) ? 'Edge'
+    : /\bOPR\//.test(userAgent) ? 'Opera'
+    // Chrome must be tested before Safari: every Chrome UA also says Safari.
+    : /\bChrome\//.test(userAgent) ? 'Chrome'
+    : /\bFirefox\//.test(userAgent) ? 'Firefox'
+    : /\bSafari\//.test(userAgent) ? 'Safari'
+    : null;
+
+  const platform =
+    /\biPhone\b/.test(userAgent) ? 'iPhone'
+    : /\biPad\b/.test(userAgent) ? 'iPad'
+    : /\bAndroid\b/.test(userAgent) ? 'Android'
+    : /\bMacintosh\b|\bMac OS X\b/.test(userAgent) ? 'macOS'
+    : /\bWindows\b/.test(userAgent) ? 'Windows'
+    : /\bLinux\b/.test(userAgent) ? 'Linux'
+    : null;
+
+  if (browser && platform) return `${browser} on ${platform}`;
+  return browser ?? platform ?? 'Unknown device';
 }
 
 export function SecurityScreen() {

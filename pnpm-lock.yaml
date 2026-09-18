@@ -431,6 +431,9 @@ importers:
         specifier: ^19.0.0
         version: 19.3.0
     devDependencies:
+      '@rayi/domain':
+        specifier: workspace:*
+        version: link:../domain
       msw:
         specifier: ^2.7.0
         version: 2.15.0(@types/node@24.13.5)(typescript@5.9.3)

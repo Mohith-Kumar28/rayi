@@ -99,3 +99,69 @@ export interface AuditHead {
   readonly hash: string;
   readonly occurredAt: Date;
 }
+
+/**
+ * What each audited action says to the person it happened to.
+ *
+ * Server-owned, and complete by construction: the `Record<AuditAction, string>`
+ * type means adding an action without writing its sentence fails the build,
+ * rather than shipping a screen that shows `member.role_changed` to somebody
+ * being asked whether they recognise it.
+ *
+ * That panel's whole purpose is a person noticing something they did not do —
+ * "If something here was not you, sign out everywhere and tell us". A raw event
+ * key cannot be evaluated by the one person able to raise the alarm, so the
+ * copy is a security property of this log rather than presentation on top of it.
+ *
+ * Written in the passive, deliberately. The reader is not always the actor —
+ * an owner reads their own history, and "Someone's role was changed" is true
+ * whoever did it, where "You changed someone's role" would sometimes be a lie
+ * on the exact event they are checking.
+ */
+export const AUDIT_ACTION_COPY: Record<AuditAction, string> = {
+  [AuditAction.SessionRevoked]: 'A device was signed out',
+  [AuditAction.SessionsRevokedAll]: 'All other devices were signed out',
+
+  [AuditAction.ProfileUpdated]: 'Your profile was updated',
+  [AuditAction.EmailChangeRequested]: 'An email address change was requested',
+  [AuditAction.EmailChanged]: 'Your email address was changed',
+  [AuditAction.EmailChangeCancelled]: 'An email address change was cancelled',
+  [AuditAction.TwoFactorEnabled]: 'An authenticator app was added',
+  [AuditAction.StepUpFailed]: 'A security code was entered incorrectly',
+  [AuditAction.StepUpGranted]: 'A security check was passed',
+  [AuditAction.TwoFactorDisabled]: 'An authenticator app was removed',
+
+  [AuditAction.MoneyAuthorityGranted]: 'Permission to move money was granted',
+  [AuditAction.MoneyAuthorityRevoked]: 'Permission to move money was removed',
+  [AuditAction.MoneyAuthorityDenied]: 'An attempt to move money was refused',
+
+  [AuditAction.BudgetAllocationRequested]: 'Campaign budget was allocated',
+  [AuditAction.BudgetAllocationPosted]: 'A campaign budget allocation completed',
+  [AuditAction.BudgetAllocationFailed]: 'A campaign budget allocation failed',
+
+  [AuditAction.EmailSuppressed]: 'Email to your address started bouncing',
+  [AuditAction.EmailSuppressionLifted]: 'Email to your address resumed',
+
+  [AuditAction.DeliverableApproved]: 'A video was approved',
+  [AuditAction.DeliverableApprovalUndone]: 'A video approval was undone',
+  [AuditAction.DeliverableChangesRequested]: 'Changes were requested on a video',
+  [AuditAction.DeliverableSubmitted]: 'A video was submitted',
+  [AuditAction.MilestoneSatisfied]: 'A payment milestone was met',
+
+  [AuditAction.MemberInvited]: 'Someone was invited to the team',
+  [AuditAction.MemberRoleChanged]: "Someone's role was changed",
+  [AuditAction.MemberRemoved]: 'Someone was removed from the team',
+};
+
+/**
+ * The sentence for an action, or the raw key.
+ *
+ * Falls back rather than throwing: this is the security-activity screen, and an
+ * unrecognised key — from an older row, or an action added and not yet
+ * described — must still be SHOWN. Hiding an event nobody wrote copy for is
+ * exactly backwards on the one screen whose job is showing a person everything
+ * that happened to their account.
+ */
+export function auditActionCopy(action: string): string {
+  return AUDIT_ACTION_COPY[action as AuditAction] ?? action;
+}

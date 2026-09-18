@@ -11,6 +11,7 @@ import type { ListReviewQueue200ExceptionsItemChecksItemDetail } from './listRev
 
 export type ListReviewQueue200ExceptionsItemChecksItem = {
   name: string;
+  label: string;
   status: ListReviewQueue200ExceptionsItemChecksItemStatus;
   tier: ListReviewQueue200ExceptionsItemChecksItemTier;
   detail: ListReviewQueue200ExceptionsItemChecksItemDetail;

@@ -32,3 +32,16 @@ export {
   type MilestoneInput,
   type MilestoneVerdict,
 } from './deal/evaluate.js';
+
+export {
+  CHECK_CATALOGUE,
+  UnknownCheckError,
+  checkDefinition,
+  checkLabel,
+  checkTier,
+  isCheckName,
+  type CheckDefinition,
+  type CheckName,
+  type CheckStatus,
+  type CheckTier,
+} from './checks/catalogue.js';

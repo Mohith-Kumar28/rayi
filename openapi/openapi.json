@@ -1158,6 +1158,9 @@
                           "action": {
                             "type": "string"
                           },
+                          "label": {
+                            "type": "string"
+                          },
                           "ipAddress": {
                             "type": [
                               "string",
@@ -1169,6 +1172,7 @@
                           "id",
                           "occurredAt",
                           "action",
+                          "label",
                           "ipAddress"
                         ],
                         "additionalProperties": false
@@ -2438,6 +2442,9 @@
                                 "name": {
                                   "type": "string"
                                 },
+                                "label": {
+                                  "type": "string"
+                                },
                                 "status": {
                                   "type": "string",
                                   "enum": [
@@ -2462,6 +2469,7 @@
                               },
                               "required": [
                                 "name",
+                                "label",
                                 "status",
                                 "tier",
                                 "detail"

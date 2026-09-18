@@ -277,7 +277,21 @@ export function FundsScreen() {
           {data.lots.map((lot) => (
             <li key={lot.depositId} className="flex items-center justify-between px-4 py-3">
               <div>
-                <div className="font-mono text-xs text-muted">{lot.depositId.slice(0, 8)}…</div>
+                {/*
+                  Identified by WHEN it was funded, not by a truncated UUID.
+                  Every row read `33333333…`, so four deposits were
+                  indistinguishable — and telling them apart is not cosmetic
+                  here: a partial refund is "refund these whole deposits", so
+                  the brand has to be able to say which ones.
+                */}
+                <div className="text-sm text-ink">
+                  Funded{' '}
+                  {new Date(lot.fundedAt).toLocaleDateString('en-US', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </div>
                 <div className="mt-0.5 text-xs text-muted">
                   {lot.settledAt === null
                     ? 'Processing with the bank'

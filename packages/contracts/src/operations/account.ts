@@ -105,7 +105,17 @@ export const updateMyProfile = defineOperation({
 export const AuditEventSchema = z.object({
   id: z.string(),
   occurredAt: z.iso.datetime(),
+  /** The machine key — what an alert matches on and an investigator greps for. */
   action: z.string(),
+  /**
+   * The same event as a sentence — "Someone's role was changed".
+   *
+   * Server-supplied. This screen asks a person whether they recognise what
+   * happened to their account, and `member.role_changed` is not a question
+   * anybody can answer — so the copy is part of the control, not decoration on
+   * top of it.
+   */
+  label: z.string(),
   ipAddress: z.string().nullable(),
 });
 

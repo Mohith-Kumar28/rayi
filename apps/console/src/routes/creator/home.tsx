@@ -117,7 +117,21 @@ export function CreatorHomeScreen() {
                       <div className="truncate text-sm font-medium text-ink">{deal.brandName}</div>
                       <div className="truncate text-xs text-muted">{deal.campaignName}</div>
                     </div>
-                    <Money value={deal.total as MoneyValue} size="base" className="text-ink" />
+                    <div className="flex shrink-0 items-baseline gap-2">
+                      <div className="text-right">
+                        {/* Labelled. An unlabelled figure beside a brand name
+                            reads as "what I am getting paid", and this is the
+                            whole deal's worth — most of it not yet unlocked. */}
+                        <div className="text-[10px] uppercase tracking-wide text-muted">
+                          Deal worth
+                        </div>
+                        <Money value={deal.total as MoneyValue} size="base" className="text-ink" />
+                      </div>
+                      {/* The card is a link; it needs to look like one. */}
+                      <span aria-hidden className="text-muted">
+                        ›
+                      </span>
+                    </div>
                   </div>
 
                   {deal.nextUnlock && (

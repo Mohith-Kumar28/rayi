@@ -17,6 +17,7 @@ import type { FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import { AuditService } from '@/audit/audit.service';
+import { auditActionCopy } from '@/audit/audit.types';
 import { StepUpPurpose, StepUpService } from '@/auth/step-up/step-up.service';
 import type { RequestContext } from '@/common/types/request-context.type';
 import { GlobalConfig } from '@/config/config.type';
@@ -152,6 +153,9 @@ export class AccountController {
         id: event.id,
         occurredAt: event.occurredAt.toISOString(),
         action: event.action,
+        // The sentence comes from the server's own copy map, so the key a
+        // search matches and the words a person reads can never disagree.
+        label: auditActionCopy(event.action),
         ipAddress: event.ipAddress,
       })),
     };

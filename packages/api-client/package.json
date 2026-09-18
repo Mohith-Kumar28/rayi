@@ -23,6 +23,7 @@
     "@rayi/contracts": "workspace:*"
   },
   "devDependencies": {
+    "@rayi/domain": "workspace:*",
     "msw": "^2.7.0",
     "orval": "^7.3.0"
   },

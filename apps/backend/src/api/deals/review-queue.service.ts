@@ -24,10 +24,18 @@ import { PrismaService } from '@/database/prisma.service';
  * difference between a queue someone works through and a queue someone abandons.
  */
 
+/**
+ * One pipeline result.
+ *
+ * Carries only what the pipeline actually observed. `label` and `tier` are NOT
+ * here: they are properties of the check itself, declared once in the domain
+ * catalogue and derived at the serialisation boundary. A pipeline that could
+ * emit its own tier could emit a different one from the catalogue, and the
+ * reviewer would see a blocking failure rendered as advisory.
+ */
 export interface CheckResult {
   readonly name: string;
   readonly status: 'PASS' | 'FAIL' | 'ERROR';
-  readonly tier: 'BLOCKING' | 'ADVISORY';
   readonly detail: string | null;
 }
 

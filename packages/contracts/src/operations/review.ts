@@ -19,6 +19,16 @@ const OrgParams = z.object({ orgId: z.uuid() });
 export const CheckResultSchema = z.object({
   name: z.string(),
   /**
+   * What a reviewer reads — "Paid partnership disclosure", never `disclosure`.
+   *
+   * Server-supplied, from the closed check catalogue in `@rayi/domain`, for the
+   * same reason the funding status copy is server-owned: a `name -> label` map
+   * kept in the console drifts the moment a check is added, and the reviewer
+   * then sees a raw registry key in the one place they are deciding whether to
+   * pay someone.
+   */
+  label: z.string(),
+  /**
    * PASS | FAIL | ERROR.
    *
    * `ERROR` is distinct from `FAIL` and never blocks. If ffprobe crashes, the

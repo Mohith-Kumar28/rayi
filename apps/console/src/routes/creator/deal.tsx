@@ -1,4 +1,4 @@
-import { useParams } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 import { ApiError, useGetMyDeal, useSubmitDeliverable } from '@rayi/api-client';
 
 import { Money, type MoneyValue } from '../../components/Money';
@@ -44,7 +44,17 @@ export function CreatorDealScreen() {
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <header className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight text-ink">{deal.data.brandName}</h1>
+        {/*
+          A way back. Without it this screen is a dead end on a phone — the
+          creator's only exit is the browser's own back gesture, and there is no
+          brand chrome above to return them to their work.
+        */}
+        <Link to="/me" className="text-sm text-muted">
+          ← Your work
+        </Link>
+        <h1 className="mt-3 text-xl font-semibold tracking-tight text-ink">
+          {deal.data.brandName}
+        </h1>
         <p className="mt-0.5 text-sm text-muted">{deal.data.campaignName}</p>
 
         <div className="mt-4 flex items-baseline gap-6 rounded-xl border border-hair bg-white p-4">

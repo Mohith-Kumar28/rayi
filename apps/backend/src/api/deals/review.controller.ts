@@ -12,7 +12,7 @@ import {
 } from '@rayi/contracts';
 
 import type { RequestContext } from '@/common/types/request-context.type';
-import { assertCurrency, exponentOf, type Currency } from '@rayi/domain';
+import { assertCurrency, checkDefinition, exponentOf, type Currency } from '@rayi/domain';
 import {
   ValidatedBody,
   ValidatedParams,
@@ -74,7 +74,19 @@ export class ReviewController {
         submittedAt: row.submittedAt.toISOString(),
         caption: row.caption,
         previewUrl: row.previewUrl,
-        checks: row.checks.map((check) => ({ ...check })),
+        // `label` and `tier` come from the closed catalogue, never from the
+        // pipeline result — one declaration, so the words a reviewer reads and
+        // the weight they carry cannot disagree with each other.
+        checks: row.checks.map((check) => {
+          const definition = checkDefinition(check.name);
+          return {
+            name: check.name,
+            label: definition.label,
+            tier: definition.tier,
+            status: check.status,
+            detail: check.detail,
+          };
+        }),
         // Null rather than a zero amount when nothing is released. A "$0.00"
         // badge on a routine row is noise on the screen whose whole job is
         // making the money rows stand out.

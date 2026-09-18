@@ -9,7 +9,7 @@ import {
   useMatchRoute,
 } from '@tanstack/react-router';
 
-import { MOCK_IDS } from '@rayi/api-client/mocks';
+import { MOCK_IDS, MOCK_SCENARIOS } from '@rayi/api-client/mocks';
 
 import { FundsScreen } from './routes/funds';
 import { MembersScreen } from './routes/members';
@@ -41,10 +41,30 @@ function RootLayout() {
   // different person, and a nav bar full of things they cannot use is noise on a
   // screen that has one job.
   const isCreator = Boolean(matchRoute({ to: '/me', fuzzy: true }));
+  /*
+   * Neither does the admin surface — and here it is a correctness point rather
+   * than a taste one. A platform operator is not inside any tenant, so brand
+   * nav links pointing at one particular organization say something false about
+   * who they are and what they are looking at. In production this tree lives on
+   * its own origin and could not render this chrome at all; until then the
+   * layout says the same thing the deployment will.
+   */
+  const isAdmin = Boolean(matchRoute({ to: '/admin', fuzzy: true }));
 
   return (
     <div className="min-h-full bg-canvas">
-      {!isCreator && (
+      {isAdmin && (
+        <header className="border-b border-hair bg-ink">
+          <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3">
+            <div className="flex items-baseline gap-3">
+              <span className="text-sm font-semibold tracking-tight text-white">Rayi</span>
+              <span className="text-xs text-white/60">platform staff</span>
+            </div>
+            <ScenarioSwitcher dark />
+          </div>
+        </header>
+      )}
+      {!isCreator && !isAdmin && (
         <header className="border-b border-hair bg-white">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
             <div className="flex items-baseline gap-6">
@@ -96,7 +116,7 @@ function BrandNav() {
 }
 
 /** Dev-only affordance so the mocked failure paths are one click away. */
-function ScenarioSwitcher() {
+function ScenarioSwitcher({ dark = false }: { dark?: boolean }) {
   return (
     <select
       defaultValue={globalThis.__rayiScenario ?? 'default'}
@@ -104,14 +124,18 @@ function ScenarioSwitcher() {
         globalThis.__rayiScenario = event.target.value as never;
         globalThis.location.reload();
       }}
-      className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-muted"
+      className={`rounded-md border px-2 py-1 text-xs ${
+        dark ? 'border-white/20 bg-white/10 text-white' : 'border-hair bg-white text-muted'
+      }`}
       aria-label="Mock scenario"
     >
-      <option value="default">default</option>
-      <option value="insufficient-funds">insufficient funds</option>
-      <option value="step-up-required">step-up required</option>
-      <option value="idempotency-conflict">idempotency conflict</option>
-      <option value="empty">empty state</option>
+      {/* Read from the mock module rather than restated here, so a scenario
+          added to the fixtures cannot be one nobody can reach. */}
+      {MOCK_SCENARIOS.map((name) => (
+        <option key={name} value={name}>
+          {name.replace(/-/g, ' ')}
+        </option>
+      ))}
     </select>
   );
 }

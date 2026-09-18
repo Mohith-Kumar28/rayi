@@ -20,6 +20,18 @@ import { Money, type MoneyValue } from '../../components/Money';
  * every figure is the difference between "four minutes old" and "wrong".
  */
 
+/**
+ * Pluralised counts.
+ *
+ * On this panel specifically, because the first real alarm is almost always
+ * ONE problem — and "1 entries do not sum to zero" on the screen that tells an
+ * operator the ledger has broken reads as a system that is not being looked
+ * after, at the exact moment they most need to believe it is.
+ */
+function count(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 function Stat({
   label,
   value,
@@ -96,15 +108,25 @@ function LedgerHealth() {
       </p>
       <ul className="mt-2 space-y-1 text-sm text-red-800">
         {unbalancedEntries.length > 0 && (
-          <li>{unbalancedEntries.length} entries do not sum to zero</li>
+          <li>
+            {count(unbalancedEntries.length, 'entry does', 'entries do')} not sum to zero
+          </li>
         )}
         {driftedAccounts.length > 0 && (
-          <li>{driftedAccounts.length} accounts have drifted from the sum of their lines</li>
+          <li>
+            {count(driftedAccounts.length, 'account has', 'accounts have')} drifted from the sum of
+            its lines
+          </li>
         )}
         {auditChainBreaks.length > 0 && (
-          <li>{auditChainBreaks.length} breaks in the audit log's hash chain</li>
+          <li>{count(auditChainBreaks.length, 'break', 'breaks')} in the audit log's hash chain</li>
         )}
-        {failedCommands > 0 && <li>{failedCommands} treasury commands failed and were not resolved</li>}
+        {failedCommands > 0 && (
+          <li>
+            {count(failedCommands, 'treasury command', 'treasury commands')}{' '}
+            {failedCommands === 1 ? 'failed and was' : 'failed and were'} not resolved
+          </li>
+        )}
       </ul>
     </div>
   );
@@ -113,8 +135,27 @@ function LedgerHealth() {
 export function AdminOverviewScreen() {
   const stats = useGetPlatformStats();
   const brands = useListBrands();
+  // Same query key as the panel below, so this is one fetch, not two.
+  const health = useGetLedgerHealth();
 
   const statsProblem = stats.error instanceof ApiError ? stats.error.problem : null;
+
+  /**
+   * Whether the figures below can be believed.
+   *
+   * The panel says "nothing below can be trusted until this is explained".
+   * Rendering the figures at full confidence underneath that sentence makes the
+   * sentence decorative — so when the books disagree the numbers are physically
+   * dimmed and labelled. A dashboard that tells you not to trust it while
+   * looking exactly as authoritative as ever has told you nothing.
+   */
+  const booksSuspect = Boolean(
+    health.data?.checkedAt &&
+      (health.data.unbalancedEntries.length > 0 ||
+        health.data.driftedAccounts.length > 0 ||
+        health.data.auditChainBreaks.length > 0 ||
+        health.data.failedCommands > 0),
+  );
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -134,7 +175,12 @@ export function AdminOverviewScreen() {
           <p className="mt-1 text-xs text-muted">{statsProblem.detail ?? statsProblem.title}</p>
         </div>
       ) : stats.data ? (
-        <>
+        <div className={booksSuspect ? 'opacity-40 saturate-0' : undefined}>
+          {booksSuspect && (
+            <p className="mb-3 text-xs font-medium text-red-800">
+              Shown for reference only — these came from the same books.
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-4">
             <Stat label="Brands" value={String(stats.data.brandCount)} />
             <Stat label="Creators" value={String(stats.data.creatorCount)} />
@@ -200,7 +246,7 @@ export function AdminOverviewScreen() {
               </p>
             </div>
           </section>
-        </>
+        </div>
       ) : null}
 
       <section className="mt-8">
