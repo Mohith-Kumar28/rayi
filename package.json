@@ -1,0 +1,23 @@
+{
+  "name": "rayi",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "contracts": "pnpm --filter @rayi/contracts emit:openapi && pnpm --filter @rayi/api-client generate",
+    "check": "pnpm --filter @rayi/contracts verify:openapi && turbo run typecheck test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "turbo": "^2.5.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

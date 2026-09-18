@@ -1,0 +1,139 @@
+services:
+  # server:
+  #   container_name: nestjs-boilerplate-server
+  #   image: nestjs-boilerplate-server:latest
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - IS_WORKER=false
+  #   ports:
+  #     - '${APP_PORT}:${APP_PORT}'
+  #   networks:
+  #     - nestjs-boilerplate-network
+  #   depends_on:
+  #     - redis
+
+  worker:
+    container_name: nestjs-boilerplate-worker
+    image: nestjs-boilerplate-worker:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - IS_WORKER=true
+      - REDIS_PORT=6379
+      - DATABASE_URL=postgres://postgres:postgres@database:5432/nestjs_api
+      - REDIS_HOST=redis
+      - MAIL_HOST=mail
+      - MAIL_PORT=1025
+    ports:
+      - '${APP_WORKER_PORT}:${APP_WORKER_PORT}'
+    networks:
+      - nestjs-boilerplate-network
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7.0.1-alpine
+    container_name: nestjs-boilerplate-redis
+    restart: unless-stopped
+    ports:
+      - '${DOCKER_REDIS_PORT}:6379'
+    environment:
+      REDIS_ARGS: '--requirepass ${REDIS_PASSWORD}'
+    volumes:
+      - ./.docker/redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '--raw', 'incr', 'ping']
+    command: 'redis-server --save 120 1 --loglevel warning'
+    networks:
+      - nestjs-boilerplate-network
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: nestjs-boilerplate-prometheus
+    restart: unless-stopped
+    ports:
+      - ${DOCKER_PROMETHEUS_PORT}:9090
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+    volumes:
+      - ./prometheus.config.yml:/etc/prometheus/prometheus.yaml:ro
+    networks:
+      - nestjs-boilerplate-network
+    profiles:
+      - monitoring
+    depends_on:
+      - setup_prometheus
+
+  grafana:
+    image: grafana/grafana-oss:11.3.1
+    container_name: nestjs-boilerplate-grafana
+    restart: unless-stopped
+    ports:
+      - '${DOCKER_GRAFANA_PORT}:3000'
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - ./src/tools/grafana/provisioning:/etc/grafana/provisioning
+      - ./src/tools/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - nestjs-boilerplate-network
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+      - setup_grafana
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: nestjs-boilerplate-postgres-exporter
+    ports:
+      - ${DOCKER_PG_EXPORTER}:9187
+    environment:
+      DATA_SOURCE_NAME: 'postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?sslmode=${DATABASE_SSL_MODE:-disable}'
+    networks:
+      - nestjs-boilerplate-network
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+
+  # Solution to fix prometheus volume permission issue
+  setup_prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: nestjs-boilerplate-setup-prometheus
+    restart: no
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        chown -R 65534:65534 /prometheus
+    volumes:
+      - ./.docker/prometheus-data:/prometheus
+    profiles:
+      - monitoring
+
+  # Solution to fix grafana volume permission issue
+  setup_grafana:
+    image: grafana/grafana-oss:11.3.1
+    container_name: nestjs-boilerplate-setup-grafana
+    restart: no
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        chown -R 65534:65534 /var/lib/grafana
+    volumes:
+      - ./.docker/grafana-data:/var/lib/grafana
+    profiles:
+      - monitoring
+
+networks:
+  nestjs-boilerplate-network:
+    name: nestjs-boilerplate-network
+    driver: bridge

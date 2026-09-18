@@ -1,0 +1,32 @@
+{
+  "name": "@rayi/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./mocks": {
+      "types": "./src/mocks.ts",
+      "default": "./src/mocks.ts"
+    }
+  },
+  "scripts": {
+    "generate": "orval --config orval.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.7",
+    "@rayi/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "msw": "^2.7.0",
+    "orval": "^7.3.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

@@ -1,0 +1,164 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum Role {
+    User
+    Admin
+}
+
+// Base model fields
+model User {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    // User specific fields
+    username         String  @unique
+    displayUsername  String?
+    email            String  @unique
+    isEmailVerified  Boolean @default(false)
+    role             Role    @default(User)
+    firstName        String?
+    lastName         String?
+    image            String?
+    bio              String?
+    twoFactorEnabled Boolean @default(false)
+
+    // Relations
+    accounts   Account[]
+    sessions   Session[]
+    passkeys   Passkey[]
+    twoFactors TwoFactor[]
+
+    // Created/Updated by relations
+    createdFiles File[] @relation("CreatedFiles")
+    updatedFiles File[] @relation("UpdatedFiles")
+    deletedFiles File[] @relation("DeletedFiles")
+
+    @@map("user")
+}
+
+model Account {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    accountId             String
+    providerId            String // 'credential' in better-auth
+    accessToken           String?
+    refreshToken          String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    idToken               String?
+    password              String?
+
+    @@map("account")
+}
+
+model Session {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    token     String
+    expiresAt DateTime
+    ipAddress String?
+    userAgent String?
+
+    @@map("session")
+}
+
+model Verification {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    identifier String
+    value      String
+    expiresAt  DateTime
+
+    @@map("verification")
+}
+
+model Passkey {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    name   String?
+    userId String
+    user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    publicKey    String
+    credentialID String
+    counter      Int
+    deviceType   String
+    backedUp     String
+    transports   String
+
+    @@map("passkey")
+}
+
+model TwoFactor {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    secret      String?
+    backupCodes String?
+
+    @@map("twoFactor")
+}
+
+// Example of converting a CreatorModel entity
+model File {
+    id        String    @id @default(cuid())
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    // File specific fields
+    filename     String
+    originalName String
+    mimeType     String
+    size         Int
+    path         String
+
+    // Creator model fields
+    createdByUserId String?
+    createdBy       User?   @relation("CreatedFiles", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+    updatedByUserId String?
+    updatedBy       User?   @relation("UpdatedFiles", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+    deletedByUserId String?
+    deletedBy       User?   @relation("DeletedFiles", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+
+    @@map("file")
+}

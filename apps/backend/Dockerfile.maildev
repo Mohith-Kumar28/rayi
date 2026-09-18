@@ -1,0 +1,5 @@
+FROM NODE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-slim
+
+RUN npm i -g maildev@2.1.0 --registry https://registry.npmmirror.com/
+
+CMD maildev

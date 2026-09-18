@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A money system: never run two deploys of the same ref concurrently, and never
+# cancel a run halfway through in a way that leaves a partial state.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and test
+        run: pnpm turbo run typecheck test
+
+      # The drift gate. Changing a contract without regenerating the spec fails
+      # here rather than shipping a document that disagrees with the server.
+      - name: Verify openapi.json matches the manifest
+        run: pnpm --filter @rayi/contracts verify:openapi
+
+      # The generated client must match the committed spec too — otherwise the
+      # frontend is typed against something the backend does not serve.
+      - name: Verify the generated client is up to date
+        run: |
+          pnpm --filter @rayi/api-client generate
+          if ! git diff --quiet -- packages/api-client/src/generated; then
+            echo "::error::The generated API client is out of date."
+            echo "Run: pnpm contracts"
+            git diff --stat -- packages/api-client/src/generated
+            exit 1
+          fi
+
+      # Module boundaries. Nest's encapsulation is a DI boundary, not an import
+      # boundary — this is what actually stops a controller reaching the treasury.
+      - name: Check module boundaries
+        run: pnpm --filter @rayi/backend depcruise
+
+      - name: Build
+        run: pnpm turbo run build

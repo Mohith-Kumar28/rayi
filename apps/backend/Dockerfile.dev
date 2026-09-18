@@ -1,0 +1,15 @@
+ARG NODE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-slim
+
+FROM ${NODE_IMAGE} AS base
+
+RUN apt-get update && apt-get install -y procps
+
+RUN npm install -g pnpm@10.12.3 --registry https://registry.npmmirror.com/
+
+FROM base AS development
+WORKDIR /app
+
+COPY package*.json pnpm-lock.yaml pnpm-workspace.yaml ./prisma ./
+
+RUN pnpm install --registry https://registry.npmmirror.com/
+RUN pnpm prisma:generate

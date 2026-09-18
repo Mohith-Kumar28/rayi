@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Never commit secrets. Money system: this rule has no exceptions.
+.env
+.env.*
+!.env.example
+
+.DS_Store

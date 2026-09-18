@@ -1,0 +1,56 @@
+services:
+  # server:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   volumes:
+  #     - /app/node_modules
+  #     - .:/app
+  #   depends_on:
+  #     - database
+  #     - redis
+  #     - mail
+  #   command: >
+  #     sh -c "pnpm start:dev"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - /app/node_modules
+      - .:/app
+    depends_on:
+      - database
+      - redis
+    command: >
+      sh -c "pnpm start:dev"
+
+  database:
+    image: postgres:16
+    container_name: nestjs-boilerplate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: '${DATABASE_USERNAME}'
+      POSTGRES_PASSWORD: '${DATABASE_PASSWORD}'
+      POSTGRES_DB: '${DATABASE_NAME}'
+      TZ: 'UTC'
+    ports:
+      - '${DOCKER_DATABASE_PORT}:5432'
+    volumes:
+      - ./.docker/postgres_data:/var/lib/postgresql/data
+    networks:
+      - nestjs-boilerplate-network
+
+  mail:
+    image: axllent/mailpit:v1.25
+    container_name: nestjs-boilerplate-mail
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - ${DOCKER_MAIL_PORT}:1025
+      - ${DOCKER_MAIL_CLIENT_PORT}:8025
+    networks:
+      - nestjs-boilerplate-network

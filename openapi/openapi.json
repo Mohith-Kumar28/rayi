@@ -1,0 +1,896 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Rayi API",
+    "version": "0.1.0",
+    "description": "Conditional payment rail for brand and creator collaborations. Money crosses this API as integer minor units in a string, never as a JSON number."
+  },
+  "paths": {
+    "/v1/orgs/{orgId}/funds": {
+      "get": {
+        "operationId": "getOrgFunds",
+        "summary": "Read an organization funding balance",
+        "tags": [
+          "funding"
+        ],
+        "description": "Returns available, clearing, pending and allocated balances plus the per-deposit lots behind them. Pending funds are shown but can never be allocated.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "The organization that owns the funds."
+            },
+            "description": "The organization that owns the funds."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "orgId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "available": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "clearing": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "pending": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "allocated": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$",
+                          "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "CAD",
+                            "EUR",
+                            "GBP",
+                            "AUD",
+                            "INR",
+                            "JPY",
+                            "KRW",
+                            "BHD",
+                            "KWD"
+                          ],
+                          "description": "ISO-4217 currency code."
+                        },
+                        "exponent": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4,
+                          "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "exponent"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A monetary amount in integer minor units."
+                    },
+                    "lots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "depositId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "available": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)$",
+                                "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "CAD",
+                                  "EUR",
+                                  "GBP",
+                                  "AUD",
+                                  "INR",
+                                  "JPY",
+                                  "KRW",
+                                  "BHD",
+                                  "KWD"
+                                ],
+                                "description": "ISO-4217 currency code."
+                              },
+                              "exponent": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4,
+                                "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                              }
+                            },
+                            "required": [
+                              "amountMinor",
+                              "currency",
+                              "exponent"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A monetary amount in integer minor units."
+                          },
+                          "settledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Null while the ACH debit is still clearing."
+                          },
+                          "maturesAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "When this lot leaves its ACH return window and becomes releasable."
+                          },
+                          "fundedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "depositId",
+                          "available",
+                          "settledAt",
+                          "maturesAt",
+                          "fundedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "orgId",
+                    "available",
+                    "clearing",
+                    "pending",
+                    "allocated",
+                    "lots"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "funds:read",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
+    },
+    "/v1/orgs/{orgId}/campaigns": {
+      "get": {
+        "operationId": "listCampaigns",
+        "summary": "List campaigns in an organization",
+        "tags": [
+          "campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "The organization that owns the funds."
+            },
+            "description": "The organization that owns the funds."
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "funded",
+                "live",
+                "paused",
+                "completed",
+                "cancelled"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "campaigns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "campaignId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "workspaceId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "funded",
+                              "live",
+                              "paused",
+                              "completed",
+                              "cancelled"
+                            ]
+                          },
+                          "allocated": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)$",
+                                "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "CAD",
+                                  "EUR",
+                                  "GBP",
+                                  "AUD",
+                                  "INR",
+                                  "JPY",
+                                  "KRW",
+                                  "BHD",
+                                  "KWD"
+                                ],
+                                "description": "ISO-4217 currency code."
+                              },
+                              "exponent": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4,
+                                "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                              }
+                            },
+                            "required": [
+                              "amountMinor",
+                              "currency",
+                              "exponent"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A monetary amount in integer minor units."
+                          },
+                          "released": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)$",
+                                "description": "Integer minor units as a string. Never a JSON number — precision is not optional here."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "CAD",
+                                  "EUR",
+                                  "GBP",
+                                  "AUD",
+                                  "INR",
+                                  "JPY",
+                                  "KRW",
+                                  "BHD",
+                                  "KWD"
+                                ],
+                                "description": "ISO-4217 currency code."
+                              },
+                              "exponent": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4,
+                                "description": "Minor-unit exponent for this currency, supplied by the server. Never assume 2."
+                              }
+                            },
+                            "required": [
+                              "amountMinor",
+                              "currency",
+                              "exponent"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A monetary amount in integer minor units."
+                          },
+                          "deliverablesTotal": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "deliverablesApproved": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "campaignId",
+                          "workspaceId",
+                          "name",
+                          "state",
+                          "allocated",
+                          "released",
+                          "deliverablesTotal",
+                          "deliverablesApproved"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "campaigns"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "campaign:read",
+          "stepUp": false,
+          "movesMoney": false
+        }
+      }
+    },
+    "/v1/orgs/{orgId}/campaigns/{campaignId}/allocations": {
+      "post": {
+        "operationId": "allocateBudget",
+        "summary": "Allocate budget from the organization balance to a campaign",
+        "tags": [
+          "funding"
+        ],
+        "description": "Accepts an allocation intent and returns 202. The API writes a treasury command and enqueues the job in one transaction; it performs no money work inline and holds no Stripe credential. The worker posts the ledger entry, where an over-allocation is rejected by a database constraint rather than by application logic.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "The organization that owns the funds."
+            },
+            "description": "The organization that owns the funds."
+          },
+          {
+            "name": "campaignId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "commandId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "description": "The treasury command accepted for processing."
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "accepted"
+                      ]
+                    },
+                    "campaignId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  },
+                  "required": [
+                    "commandId",
+                    "status",
+                    "campaignId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Problem details.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-rayi-access": {
+          "kind": "permission",
+          "permission": "campaign:allocate",
+          "stepUp": false,
+          "movesMoney": true
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "object",
+                    "properties": {
+                      "amountMinor": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "USD",
+                          "CAD",
+                          "EUR",
+                          "GBP",
+                          "AUD",
+                          "INR",
+                          "JPY",
+                          "KRW",
+                          "BHD",
+                          "KWD"
+                        ],
+                        "description": "ISO-4217 currency code."
+                      }
+                    },
+                    "required": [
+                      "amountMinor",
+                      "currency"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A monetary amount supplied by a client. The server derives the exponent."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 200
+                  },
+                  "expectedAvailableMinor": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Problem": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "A URI reference identifying the problem type."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short, human-readable summary. Safe to reword — do not branch on it."
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "HTTP status code."
+          },
+          "detail": {
+            "description": "Human-readable explanation specific to this occurrence.",
+            "type": "string"
+          },
+          "instance": {
+            "description": "URI reference identifying this specific occurrence.",
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "validation_failed",
+              "unauthenticated",
+              "forbidden",
+              "step_up_required",
+              "not_found",
+              "idempotency_key_reused",
+              "insufficient_unallocated_funds",
+              "budget_envelope_exceeded",
+              "daily_limit_exceeded",
+              "deposit_not_settled",
+              "organization_frozen",
+              "conflict",
+              "rate_limited",
+              "internal_error"
+            ],
+            "description": "Stable machine-readable code. THIS is the contract."
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Correlates to server logs. Always show this in support surfaces."
+          },
+          "challenge": {
+            "type": "object",
+            "properties": {
+              "challengeId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "challengeId",
+              "reason",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "requestId"
+        ],
+        "additionalProperties": false,
+        "description": "RFC 9457 problem details."
+      }
+    },
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-rayi.session",
+        "description": "Host-only session cookie. The API is served same-origin with the app, so there is no CORS, no preflight and no SameSite=None."
+      }
+    }
+  },
+  "security": [
+    {
+      "sessionCookie": []
+    }
+  ]
+}
