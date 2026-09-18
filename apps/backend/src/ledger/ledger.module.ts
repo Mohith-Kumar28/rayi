@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '@/database/prisma.module';
 
+import { LedgerIntegrityService } from './infrastructure/ledger-integrity.service';
 import { LedgerRepository } from './infrastructure/ledger.repository';
 
 /**
@@ -12,11 +13,14 @@ import { LedgerRepository } from './infrastructure/ledger.repository';
  * has no grants on the `ledger` schema, so even a compromised api cannot post.
  *
  * `exports` is deliberately just the repository: nothing outside gets a Prisma
- * handle onto ledger tables.
+ * handle onto ledger tables. `LedgerIntegrityService` is NOT exported — it is not
+ * something other code calls, it is something that runs at boot and refuses to
+ * let this process serve if the database has lost a control the money-safety
+ * argument depends on.
  */
 @Module({
   imports: [PrismaModule],
-  providers: [LedgerRepository],
+  providers: [LedgerRepository, LedgerIntegrityService],
   exports: [LedgerRepository],
 })
 export class LedgerModule {}

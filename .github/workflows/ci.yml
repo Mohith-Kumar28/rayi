@@ -48,8 +48,11 @@ jobs:
             sleep 1
           done
 
+      # Through the guarded entrypoint, so CI exercises the same path a deploy
+      # takes — including the checks that Prisma's migration advisory lock has
+      # not been disabled and is not being taken through a transaction-mode pooler.
       - name: Apply migrations
-        run: pnpm --filter @rayi/backend exec prisma migrate deploy
+        run: pnpm --filter @rayi/backend migrate:deploy
         env:
           DATABASE_URL: postgresql://rayi:rayi@localhost:55432/rayi
 
@@ -93,6 +96,12 @@ jobs:
             git diff --stat -- packages/api-client/src/generated
             exit 1
           fi
+
+      # The set of internet-reachable Better Auth endpoints. Better Auth is mounted
+      # as a catch-all, so a new endpoint in a patch release becomes reachable the
+      # moment the lockfile changes — with no code review of ours in the path.
+      - name: Verify the Better Auth surface has not changed
+        run: pnpm --filter @rayi/backend verify:auth-surface
 
       # Module boundaries. Nest's encapsulation is a DI boundary, not an import
       # boundary — this is what actually stops a controller reaching the treasury.

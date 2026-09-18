@@ -5,7 +5,10 @@ until step 16.
 
 **Status: 1 ✅ · 2 ✅ · 3 🟡 · 4 ✅ · 5 ✅ · 6 🟡 · 7 ✅ · 8–16 ⬜**
 
-Current test count: **271 passing**.
+Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
+Better Auth account endpoints that are currently blocked rather than replaced.
+
+Current test count: **317 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
@@ -13,11 +16,12 @@ Current test count: **271 passing**.
 | `@rayi/contracts` — manifest invariants, OpenAPI shape | 15 | no |
 | `@rayi/api-client` — generated client + error envelope | 10 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
-| `@rayi/backend` unit — config, guards, **architecture boundaries** | 112 | no |
-| `@rayi/backend` integration — ledger, authorization, treasury, HTTP, queue | **68** | **yes** |
+| `@rayi/backend` unit — config, guards, **auth allowlist**, **architecture boundaries** | 142 | no |
+| `@rayi/backend` integration — ledger, **integrity**, authorization, treasury, HTTP, queue | **84** | **yes** |
 
-Run them: `pnpm turbo run typecheck test` for everything that needs no database, then
-`pnpm --filter @rayi/backend test:it` with `DATABASE_URL` pointed at a real Postgres 17.
+Two gates run outside the test suites, both of which fail CI on drift:
+`pnpm verify:openapi` (the spec matches the manifest) and `pnpm verify:auth-surface`
+(the set of internet-reachable Better Auth endpoints is the one that was reviewed).
 
 ---
 
@@ -77,9 +81,42 @@ functions, and every one of those is load-bearing.
       organization is unrepresentable, and the NULL escape hatch that a MATCH SIMPLE composite FK
       would leave open is closed
 - [x] Three roles with grants; `rayi_api` has **no ledger access at all**
-- [ ] Boot assertion querying `pg_constraint` / `pg_trigger`
+- [x] **Boot assertion** querying `pg_constraint`, `pg_trigger`, `pg_proc`, `pg_index` and
+      `information_schema.columns` — `LedgerIntegrityService` refuses to let the process start if the
+      database it actually connected to is missing any control. Ten tests DROP a real constraint and
+      assert it fires
+- [x] **Migrations gated on an advisory lock** — Prisma's schema engine already takes
+      `pg_advisory_lock(72707369)`, verified by reading the engine binary. What was missing was a
+      guard on the two ways that lock is silently lost; `scripts/migrate.ts` refuses both
 - [ ] RLS on org-scoped tables with a `withTenant()` helper
-- [ ] Migrations as a one-off task gated on an advisory lock
+
+### The boot assertion, and why it is not paranoia
+
+The whole design says *"over-allocation is impossible because a CHECK constraint prevents it."* That
+sentence is true of the schema in the migrations, not of whatever database `DATABASE_URL` points at.
+Between those two sit: a migration that was rolled back, a restore from before a control existed, a
+`DROP CONSTRAINT` in a hotfix nobody re-added, a staging URL pasted into a production secret, and a
+compromised migrator role. Every one produces a system that looks completely normal and has quietly
+stopped enforcing solvency.
+
+Five catalog queries at startup, and it fails **closed** — for a process that moves money, not
+running is the correct behaviour when its guarantees cannot be verified. It collects *every* failure
+rather than stopping at the first, because "three controls missing" points at a restore and "one
+missing" points at a bad migration, and a check that stops early cannot tell them apart.
+
+It also checks two things presence alone would miss: that `entry_line_balanced` is still
+`DEFERRABLE INITIALLY DEFERRED` (recreated immediate, it rejects every legitimate multi-line entry),
+and that `post_entry` still has `SECURITY DEFINER` (without it the one-door privilege boundary is
+gone). Plus `transaction_isolation = read committed`, since the no-`SERIALIZABLE` concurrency
+argument only holds there.
+
+### Migrations: Prisma already locks, so we guard the lock
+
+`SELECT pg_advisory_lock(72707369)` is in the schema engine, with a documented timeout. Writing a
+second lock on top would be worse than writing none — two schemes each believing they are the
+authority is how a deploy hangs holding both. `scripts/migrate.ts` instead refuses to run when
+`PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK` is set, or when `DATABASE_URL` looks like a transaction-mode
+pooler, because a pooler does not hold session state and a session-level lock then protects nothing.
 
 **Verified against real Postgres 17** — all ten invariants:
 
@@ -153,10 +190,42 @@ the UI** — see technical debt.
 - [x] Money capability as a `MoneyAuthority` **row**, never a role string
 - [x] Org / workspace / member model with composite FKs making a cross-org pairing unrepresentable
 - [x] `PermissionGuard` enforcing deny-by-default, scope from the URL, 404 rather than 403
-- [ ] Better Auth deny-by-default **path allowlist**; `/organization/*` blocked and reimplemented as
-      Nest controllers with audit + step-up
-- [ ] Committed allowlist snapshot failing CI on a version bump
+- [x] **Better Auth deny-by-default path allowlist** at the mount — 10 routes open, all 32 others
+      404. `emailAndPassword` disabled, and the password endpoints independently excluded
+- [x] **Committed surface snapshot** (`auth-surface.snapshot.json`, 42 endpoints) with
+      `pnpm verify:auth-surface` failing CI when a version bump changes it
+- [ ] Reimplement invite / role-change / member-removal as Nest controllers with audit + step-up
+      (they are currently *blocked*, not replaced — see below)
 - [ ] Generate Better Auth's `ac` object from `role_permission` at boot with an equality assertion
+
+### The mount was the hole, and it is closed
+
+Better Auth is mounted as `fastify.all('/api/auth/*')` and its handler **serves and returns before
+Nest's guard chain runs**. `AuthGuard` and `PermissionGuard` never see those requests, and neither
+does any route-coverage test, because these are not Nest routes.
+
+The installed version exposes **42 endpoints** that way. Among them `/update-user`, `/change-email`,
+`/delete-user`, `/two-factor/disable`, `/revoke-sessions`, `/link-social`, `/unlink-account` — every
+one a security-relevant mutation reachable with nothing but a session cookie, with no MFA, no
+step-up, no audit row and no authorization of ours.
+
+Now the mount serves only what `ALLOWED_AUTH_ROUTES` lists and **404s** everything else. 404 rather
+than 403: a 403 confirms the endpoint exists and is merely blocked, which discloses the version and
+plugin set.
+
+`BLOCKED_AUTH_ROUTES` records why each closed endpoint is closed, and a test asserts every endpoint
+in the snapshot appears in one list or the other — an endpoint nobody decided about is one nobody
+read.
+
+**Not yet replaced, only blocked:** `/update-user`, `/change-email`, `/two-factor/*` enrolment and
+session management have no Rayi equivalent yet. Users cannot currently change their email or manage
+their sessions at all. That is the right trade while the replacements are built — the endpoints
+being open was an escalation path — but it is a functional gap, not a finished feature.
+
+**Passwords are off.** `emailAndPassword: { enabled: false }` removes the precondition for
+GHSA-qq9h-g4jm-xgf3 globally. Sign-in is magic link plus TOTP. Note the seed script
+(`src/database/seeds/seed.ts`) still creates an admin with a password through its own Better Auth
+instance — the user is created correctly but that password will not sign them in.
 
 ## ✅ 7. The vertical slice — allocate campaign budget
 
@@ -302,5 +371,9 @@ while Stripe has moved on.
 - [ ] `org_lot_to_spend` raises on multiple lots — replace with FIFO consumption in step 11
 - [ ] `expectedAvailableMinor` is compared against the single spendable lot, which equals the org
       available only while there is one lot. Revisit with FIFO.
-- [ ] `TreasuryCommandListener` sweeps every 5s with no backoff and no claim — fine for one worker,
-      needs `FOR UPDATE SKIP LOCKED` before a second one runs
+- [x] ~~`TreasuryCommandListener` needs `FOR UPDATE SKIP LOCKED` before a second worker runs~~ — done:
+      claims are atomic, leases expire after 5 minutes so a dead worker's command is reclaimed, and
+      `attempts` is capped at 5 so a poison command stops being retried instead of becoming a hot loop
+- [ ] Users cannot change their email or manage sessions: those Better Auth endpoints are blocked and
+      their Nest replacements are not built yet
+- [ ] The seed script creates an admin with a password, which no longer signs anyone in

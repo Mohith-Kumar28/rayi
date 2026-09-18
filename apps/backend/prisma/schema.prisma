@@ -338,7 +338,21 @@ model TreasuryCommand {
     expectedAvailableMinor BigInt?
 
     /// pending | processing | completed | failed
+    ///
+    /// `pending` and `processing` are both live work. A crashed worker leaves a
+    /// row in `processing` forever, so the sweep RECLAIMS one whose lease has
+    /// expired — safe only because `ledger.post_entry` is idempotent on this
+    /// row's id, so a reclaim of work that did in fact post converges rather
+    /// than paying twice.
     status String @default("pending")
+
+    /// The lease. A worker claims a batch by flipping pending → processing under
+    /// `FOR UPDATE SKIP LOCKED`, so two workers never claim the same row.
+    claimedAt DateTime?
+    claimedBy String?
+    /// Bounded, so a command that fails the same way forever stops being retried
+    /// and becomes something a human looks at.
+    attempts  Int       @default(0)
 
     /// Who asked, and under what authority. Re-verified at execution time.
     actorUserId   String
@@ -352,7 +366,10 @@ model TreasuryCommand {
     createdAt   DateTime  @default(now())
     processedAt DateTime?
 
+    /// The claim query's index: find live work, oldest first.
     @@index([status, createdAt])
+    /// Finding expired leases to reclaim.
+    @@index([status, claimedAt])
     @@index([organizationId])
     @@map("treasury_command")
 }

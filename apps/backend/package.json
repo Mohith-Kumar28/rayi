@@ -37,7 +37,10 @@
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "test:it": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-integration.json --runInBand",
     "db:test:up": "docker run -d --rm --name rayi-pg -e POSTGRES_PASSWORD=rayi -e POSTGRES_USER=rayi -e POSTGRES_DB=rayi -p 55432:5432 postgres:17-alpine",
-    "db:test:down": "docker rm -f rayi-pg"
+    "db:test:down": "docker rm -f rayi-pg",
+    "auth:surface": "tsx ./scripts/auth-surface.ts",
+    "verify:auth-surface": "tsx ./scripts/auth-surface.ts --check",
+    "migrate:deploy": "tsx ./scripts/migrate.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.844.0",
@@ -157,6 +160,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.36.0",
     "wait-on": "^8.0.3"

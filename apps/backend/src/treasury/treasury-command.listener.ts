@@ -41,6 +41,31 @@ const POLL_INTERVAL_MS = 5_000;
 /** Rows per sweep. Bounded so one backlog cannot monopolise the process. */
 const POLL_BATCH_SIZE = 50;
 
+/**
+ * How long a claim is good for.
+ *
+ * A worker that is killed mid-command leaves its row in `processing` with
+ * nobody coming back for it. After the lease expires another worker reclaims it.
+ *
+ * Reclaiming is only safe because `ledger.post_entry` is idempotent on the
+ * command id: if the original worker had in fact posted before dying, the
+ * reclaim converges on that same entry instead of posting a second one. Without
+ * that property this timeout would be a double-payment schedule.
+ *
+ * Five minutes is far longer than any command takes and far shorter than anyone
+ * will wait for a stuck allocation.
+ */
+const LEASE_MS = 5 * 60 * 1000;
+
+/**
+ * How many times one command may be attempted before it stops being retried.
+ *
+ * An unbounded retry on the money path is how a single poison command becomes a
+ * hot loop against Stripe. Terminal failures already mark themselves `failed`;
+ * this catches the case where the worker dies before it can record why.
+ */
+const MAX_ATTEMPTS = 5;
+
 @Injectable()
 export class TreasuryCommandListener
   implements OnModuleInit, OnApplicationShutdown
@@ -51,6 +76,12 @@ export class TreasuryCommandListener
   private timer?: NodeJS.Timeout;
   private sweeping = false;
   private stopped = false;
+
+  /**
+   * Who holds a claim. Recorded so an abandoned lease names the process that
+   * abandoned it — otherwise "which task died" is unanswerable from the data.
+   */
+  private readonly workerId = `${process.env['HOSTNAME'] ?? 'local'}:${process.pid}`;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -105,7 +136,12 @@ export class TreasuryCommandListener
       // The payload is a POINTER — the command id — never the command itself.
       // Anything carried in a notification would be untrusted by the time it
       // arrives, and Postgres caps the payload at 8000 bytes anyway.
-      void this.run(message.payload);
+      //
+      // A notification does NOT go straight to the processor: it triggers a
+      // claim, so the row still goes through `FOR UPDATE SKIP LOCKED` exactly as
+      // a swept row does. Two workers receiving the same notification is the
+      // normal case, and only one may own the command.
+      void this.sweep();
     });
 
     await client.connect();
@@ -125,25 +161,19 @@ export class TreasuryCommandListener
   /**
    * The durable sweep.
    *
-   * Picks up anything still pending: notifications missed while the worker was
-   * down, commands whose notification was dropped under load, and anything
-   * restored from a backup. Guarded against overlap so a slow batch does not
-   * stack up behind itself.
+   * Picks up anything still live: notifications missed while the worker was
+   * down, commands whose notification was dropped under load, anything restored
+   * from a backup, and rows abandoned by a worker that died mid-command.
+   *
+   * Guarded against overlap so a slow batch does not stack up behind itself.
    */
   private async sweep(): Promise<void> {
     if (this.sweeping || this.stopped) return;
     this.sweeping = true;
     try {
-      const pending = await this.prisma.treasuryCommand.findMany({
-        where: { status: 'pending' },
-        orderBy: { createdAt: 'asc' },
-        take: POLL_BATCH_SIZE,
-        select: { id: true },
-      });
-
-      for (const command of pending) {
+      for (const commandId of await this.claim(POLL_BATCH_SIZE)) {
         if (this.stopped) break;
-        await this.run(command.id);
+        await this.run(commandId);
       }
     } catch (error) {
       this.logger.error(
@@ -152,6 +182,50 @@ export class TreasuryCommandListener
     } finally {
       this.sweeping = false;
     }
+  }
+
+  /**
+   * Atomically take ownership of a batch of commands.
+   *
+   * `FOR UPDATE SKIP LOCKED` is what makes a second worker safe: each row is
+   * locked by exactly one claimer, and the others step over it instead of
+   * blocking behind it. Without `SKIP LOCKED` two workers serialize on the same
+   * row and the second does the work again; without the lock at all they both
+   * process every row.
+   *
+   * The `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` shape is
+   * one statement, so claiming is atomic with no window between selecting a row
+   * and marking it taken.
+   *
+   * Three kinds of row are claimable:
+   *   - `pending`, never attempted
+   *   - `processing` whose lease has expired — the worker that held it is gone
+   *   - neither, once `attempts` is exhausted: left alone for a human
+   */
+  private async claim(limit: number): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE treasury_command
+         SET status      = 'processing',
+             "claimedAt" = now(),
+             "claimedBy" = ${this.workerId},
+             attempts    = attempts + 1
+       WHERE id IN (
+         SELECT id FROM treasury_command
+          WHERE attempts < ${MAX_ATTEMPTS}
+            AND (
+              status = 'pending'
+              OR (
+                status = 'processing'
+                AND "claimedAt" < now() - ${`${LEASE_MS} milliseconds`}::interval
+              )
+            )
+          ORDER BY "createdAt"
+          LIMIT ${limit}
+          FOR UPDATE SKIP LOCKED
+       )
+      RETURNING id
+    `;
+    return rows.map((row) => row.id);
   }
 
   /**

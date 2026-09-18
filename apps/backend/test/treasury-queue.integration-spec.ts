@@ -286,3 +286,154 @@ describe('a request becomes a balance change with nobody driving the worker', ()
     expect(lot + allocated).toBe(FUNDED_MINOR);
   }, 20_000);
 });
+
+describe('two workers can run without doing each other\'s work', () => {
+  /**
+   * `FOR UPDATE SKIP LOCKED` is what makes a second worker safe. These tests are
+   * about the CLAIM, not about the ledger — the ledger already converges, so a
+   * missing claim wastes work rather than corrupting state. But wasted work on
+   * the money path means two workers re-authorising, re-deriving and racing
+   * every command, and that is a problem to find now rather than under load.
+   */
+
+  it('hands a command to exactly one worker', async () => {
+    const accepted = await useCase.execute({
+      organizationId: orgId,
+      campaignId,
+      amountMinor: 5_000n,
+      currency: 'USD',
+      idempotencyKey: `allocate:${campaignId}:claim-race`,
+      actorUserId: userId,
+    });
+
+    // Two workers sweep at the same instant. Only one may end up owning it.
+    const a = startListener();
+    const b = startListener();
+    try {
+      await Promise.all([a.onModuleInit(), b.onModuleInit()]);
+
+      await until(
+        async () =>
+          (await prisma.treasuryCommand.findUnique({ where: { id: accepted.commandId } }))
+            ?.status === 'completed',
+        10_000,
+        'the contested command to complete',
+      );
+
+      const command = await prisma.treasuryCommand.findUnique({
+        where: { id: accepted.commandId },
+      });
+
+      // Claimed once, so attempted once. Two claims would show attempts = 2.
+      expect(command?.attempts).toBe(1);
+      expect(command?.status).toBe('completed');
+
+      // And the lease was released, so nothing looks stuck.
+      expect(command?.claimedAt).toBeNull();
+      expect(command?.claimedBy).toBeNull();
+    } finally {
+      await a.onApplicationShutdown();
+      await b.onApplicationShutdown();
+    }
+  }, 40_000);
+
+  it('reclaims a command abandoned by a worker that died mid-flight', async () => {
+    const before = await campaignBalance();
+
+    const accepted = await useCase.execute({
+      organizationId: orgId,
+      campaignId,
+      amountMinor: 3_000n,
+      currency: 'USD',
+      idempotencyKey: `allocate:${campaignId}:abandoned`,
+      actorUserId: userId,
+    });
+
+    // Simulate the crash: claimed, lease taken out an hour ago, worker gone.
+    await prisma.treasuryCommand.update({
+      where: { id: accepted.commandId },
+      data: {
+        status: 'processing',
+        claimedBy: 'a-worker-that-no-longer-exists',
+        claimedAt: new Date(Date.now() - 60 * 60 * 1000),
+        attempts: 1,
+      },
+    });
+
+    listener = startListener();
+    await listener.onModuleInit();
+
+    await until(
+      async () => (await campaignBalance()) === before + 3_000n,
+      10_000,
+      'the abandoned command to be reclaimed and posted',
+    );
+
+    const recovered = await prisma.treasuryCommand.findUnique({
+      where: { id: accepted.commandId },
+    });
+    expect(recovered?.status).toBe('completed');
+    expect(recovered?.attempts).toBe(2);
+  }, 40_000);
+
+  it('does NOT reclaim a command whose lease is still valid', async () => {
+    const accepted = await useCase.execute({
+      organizationId: orgId,
+      campaignId,
+      amountMinor: 2_000n,
+      currency: 'USD',
+      idempotencyKey: `allocate:${campaignId}:still-held`,
+      actorUserId: userId,
+    });
+
+    // Another worker took it a moment ago and is presumably still working.
+    await prisma.treasuryCommand.update({
+      where: { id: accepted.commandId },
+      data: { status: 'processing', claimedBy: 'busy-worker', claimedAt: new Date(), attempts: 1 },
+    });
+
+    listener = startListener();
+    await listener.onModuleInit();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const untouched = await prisma.treasuryCommand.findUnique({
+      where: { id: accepted.commandId },
+    });
+    expect(untouched?.status).toBe('processing');
+    expect(untouched?.claimedBy).toBe('busy-worker');
+    expect(untouched?.attempts).toBe(1);
+  }, 40_000);
+
+  it('stops retrying a command that has exhausted its attempts', async () => {
+    const accepted = await useCase.execute({
+      organizationId: orgId,
+      campaignId,
+      amountMinor: 1_000n,
+      currency: 'USD',
+      idempotencyKey: `allocate:${campaignId}:poison`,
+      actorUserId: userId,
+    });
+
+    // An unbounded retry on the money path is how one poison command becomes a
+    // hot loop against Stripe. After the cap it is left for a human.
+    await prisma.treasuryCommand.update({
+      where: { id: accepted.commandId },
+      data: {
+        status: 'processing',
+        claimedBy: 'long-gone',
+        claimedAt: new Date(Date.now() - 60 * 60 * 1000),
+        attempts: 5,
+      },
+    });
+
+    listener = startListener();
+    await listener.onModuleInit();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const abandoned = await prisma.treasuryCommand.findUnique({
+      where: { id: accepted.commandId },
+    });
+    expect(abandoned?.attempts).toBe(5);
+    expect(abandoned?.status).toBe('processing');
+  }, 40_000);
+});

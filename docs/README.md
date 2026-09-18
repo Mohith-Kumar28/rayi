@@ -18,7 +18,7 @@ can pick up without re-deriving anything.
 
 **Where the build is: steps 1–7 done, 8–16 to go.** The vertical slice is complete — a real HTTP
 request becomes a `treasury_command` row, and a worker picks it up and posts a balanced ledger entry,
-with no Stripe and no external money rail involved. 271 tests pass, 68 of them against a real
+with no Stripe and no external money rail involved. 317 tests pass, 84 of them against a real
 Postgres. Start at [Roadmap](06-roadmap.md) to see exactly what is and is not built.
 
 ## The shortest possible summary

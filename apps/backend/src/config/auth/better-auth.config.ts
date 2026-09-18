@@ -62,8 +62,24 @@ export function getConfig({
     database: prismaAdapter(prismaService, {
       provider: 'postgresql',
     }),
+    /*
+     * PASSWORDS ARE DISABLED, for everyone.
+     *
+     * This removes the precondition for GHSA-qq9h-g4jm-xgf3 — the
+     * pre-account-hijacking advisory — globally, in one line. Operators sign in
+     * with a magic link plus TOTP, which is a stronger posture than password
+     * plus TOTP anyway, and creators never had a password to begin with.
+     *
+     * The rest of this block is kept and configured rather than deleted so that
+     * re-enabling it is a deliberate edit with the reset-password wiring already
+     * correct, not a hasty reimplementation during an incident.
+     *
+     * The password ENDPOINTS are independently excluded from
+     * `auth-route-allowlist.ts`. Two mechanisms, because a config regression
+     * that flipped this flag would otherwise silently re-expose them.
+     */
     emailAndPassword: {
-      enabled: true,
+      enabled: false,
       autoSignIn: false,
       requireEmailVerification: true,
       sendResetPassword: async ({ url, user }) => {

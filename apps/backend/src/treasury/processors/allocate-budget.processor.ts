@@ -20,6 +20,13 @@ import { PermissionService } from '@/authorization/permission.service';
  * a weekly payout sweep runs seven days later, by which time the approver may
  * have been demoted or removed.
  */
+/**
+ * Statuses that still represent work. `pending` is unclaimed; `processing` is
+ * claimed by a worker, which is what this processor sees for anything the queue
+ * handed it.
+ */
+const LIVE_STATUSES: string[] = ['pending', 'processing'];
+
 @Injectable()
 export class AllocateBudgetProcessor {
   private readonly logger = new Logger(AllocateBudgetProcessor.name);
@@ -140,11 +147,13 @@ export class AllocateBudgetProcessor {
       // this simply records which run got there first and leaves the other a
       // no-op.
       await this.prisma.treasuryCommand.updateMany({
-        where: { id: commandId, status: 'pending' },
+        where: { id: commandId, status: { in: LIVE_STATUSES } },
         data: {
           status: 'completed',
           ledgerEntryId: entryId,
           processedAt: new Date(),
+          claimedAt: null,
+          claimedBy: null,
         },
       });
 

@@ -70,13 +70,22 @@ Project skills in `.claude/skills/` load automatically when relevant:
 7. **A test that guards money may not swallow a rejection.** `.catch(() => null)` in a concurrency
    test is how a real double-write defect stayed hidden through a green suite.
 
+8. **A control that has never been seen to fail is a control nobody knows still works.** Every
+   boundary rule, every ledger constraint and every allowlist entry has a test that deliberately
+   breaks it and asserts the alarm fires. Adding a control without that test is adding decoration.
+
+9. **Better Auth serves before Nest's guards run.** Its mount is deny-by-default
+   (`src/auth/auth-route-allowlist.ts`): 10 endpoints open, the other 32 return 404, and
+   `pnpm verify:auth-surface` fails CI if an upgrade changes the set. Never widen it without
+   deciding, in `BLOCKED_AUTH_ROUTES`, why the endpoint was closed.
+
 ---
 
 ## Commands
 
 ```bash
 pnpm check                              # OpenAPI drift gate + typecheck + all tests + module boundaries
-pnpm check:db                           # migrations + the 68 integration tests (needs DATABASE_URL)
+pnpm check:db                           # migrations + the 84 integration tests (needs DATABASE_URL)
 pnpm contracts                          # regenerate openapi.json and the typed client
 pnpm --filter @rayi/backend depcruise   # module boundary enforcement
 pnpm --filter @rayi/console dev         # the SPA against MSW mocks, no backend needed
@@ -86,7 +95,7 @@ pnpm --filter @rayi/console dev         # the SPA against MSW mocks, no backend 
 docker run -d --name rayi-pg -e POSTGRES_PASSWORD=rayi -e POSTGRES_USER=rayi \
   -e POSTGRES_DB=rayi -p 55432:5432 postgres:17-alpine
 export DATABASE_URL=postgresql://rayi:rayi@localhost:55432/rayi
-pnpm --filter @rayi/backend exec prisma migrate deploy
+pnpm --filter @rayi/backend migrate:deploy   # guarded: refuses a disabled advisory lock or a pooler
 pnpm --filter @rayi/backend test:it
 ```
 

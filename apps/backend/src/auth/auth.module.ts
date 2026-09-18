@@ -35,6 +35,7 @@ import type {
   FastifyReply as Reply,
   FastifyRequest as Request,
 } from 'fastify';
+import { shouldServeAuthRequest } from './auth-route-allowlist';
 import { AuthService } from './auth.service';
 import { BetterAuthService } from './better-auth.service';
 
@@ -111,6 +112,25 @@ export class AuthModule implements NestModule, OnModuleInit {
             request.url,
             `${request.protocol}://${request.hostname}`,
           );
+
+          // DENY BY DEFAULT, before Better Auth sees the request.
+          //
+          // This handler serves and returns BEFORE Nest's guard chain runs, so
+          // AuthGuard and PermissionGuard never see these paths — and neither
+          // does the route-coverage test, which enumerates Nest routes. Without
+          // this check, all 42 of Better Auth's endpoints are internet-reachable
+          // with no MFA, no step-up, no audit row and no authorization of ours.
+          //
+          // 404 rather than 403: a 403 confirms the endpoint exists and is
+          // merely blocked, which tells an attacker the version and the plugin
+          // set. A 404 is indistinguishable from software that lacks the feature.
+          if (!shouldServeAuthRequest(basePath, request.method, request.url)) {
+            this.logger.warn(
+              `Blocked non-allowlisted auth route: ${request.method} ${url.pathname}`,
+            );
+            reply.status(404).send({ message: 'Not found' });
+            return;
+          }
 
           const headers = new Headers();
           Object.entries(request.headers).forEach(([key, value]) => {
