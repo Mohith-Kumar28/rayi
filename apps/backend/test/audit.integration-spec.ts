@@ -15,7 +15,8 @@ import type { PrismaService } from '../src/database/prisma.service';
  */
 
 const DATABASE_URL =
-  process.env.LEDGER_TEST_DATABASE_URL ?? 'postgresql://rayi:rayi@localhost:55432/rayi';
+  process.env.LEDGER_TEST_DATABASE_URL ??
+  'postgresql://rayi:rayi@localhost:55432/rayi';
 
 const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
 const audit = new AuditService(prisma as unknown as PrismaService);
@@ -96,7 +97,10 @@ describe('recording events', () => {
     } as unknown as PrismaService);
 
     await expect(
-      broken.record({ action: AuditAction.SessionRevoked, actorUserId: userId }),
+      broken.record({
+        action: AuditAction.SessionRevoked,
+        actorUserId: userId,
+      }),
     ).resolves.toBeNull();
   }, 20_000);
 
@@ -105,7 +109,9 @@ describe('recording events', () => {
     const broken = new AuditService(prisma as unknown as PrismaService);
     await expect(
       broken.recordInTransaction(
-        { $queryRaw: () => Promise.reject(new Error('nope')) } as unknown as PrismaService,
+        {
+          $queryRaw: () => Promise.reject(new Error('nope')),
+        } as unknown as PrismaService,
         { action: AuditAction.MoneyAuthorityGranted, actorUserId: userId },
       ),
     ).rejects.toThrow();
@@ -114,16 +120,21 @@ describe('recording events', () => {
 
 describe('the log cannot be rewritten through SQL', () => {
   it('refuses UPDATE', async () => {
-    await audit.record({ action: AuditAction.ProfileUpdated, actorUserId: userId });
+    await audit.record({
+      action: AuditAction.ProfileUpdated,
+      actorUserId: userId,
+    });
     await expect(
-      prisma.$executeRawUnsafe(`UPDATE audit.event SET action = 'account.profile_updated'`),
+      prisma.$executeRawUnsafe(
+        `UPDATE audit.event SET action = 'account.profile_updated'`,
+      ),
     ).rejects.toThrow(/append-only/);
   }, 20_000);
 
   it('refuses DELETE', async () => {
-    await expect(prisma.$executeRawUnsafe(`DELETE FROM audit.event`)).rejects.toThrow(
-      /append-only/,
-    );
+    await expect(
+      prisma.$executeRawUnsafe(`DELETE FROM audit.event`),
+    ).rejects.toThrow(/append-only/);
   }, 20_000);
 });
 
@@ -150,7 +161,10 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
       prisma.$queryRawUnsafe(`SELECT audit.record('NOT A VALID ACTION')`),
     ).rejects.toThrow();
 
-    await audit.record({ action: AuditAction.ProfileUpdated, actorUserId: userId });
+    await audit.record({
+      action: AuditAction.ProfileUpdated,
+      actorUserId: userId,
+    });
 
     expect(await audit.verifyChain()).toEqual([]);
   }, 30_000);
@@ -178,7 +192,10 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
       expect(breaks[0]?.seq).toBe(seq);
       expect(breaks[0]?.reason).toMatch(/do not match its recorded hash/);
     } finally {
-      await prisma.$executeRawUnsafe(`DELETE FROM audit.event WHERE seq >= $1`, seq);
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM audit.event WHERE seq >= $1`,
+        seq,
+      );
       await prisma.$executeRawUnsafe(
         `ALTER TABLE audit.event ENABLE TRIGGER audit_event_append_only`,
       );
@@ -189,7 +206,10 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
 
   it('catches a row removed from the MIDDLE, via the broken link', async () => {
     for (let i = 0; i < 3; i += 1) {
-      await audit.record({ action: AuditAction.ProfileUpdated, actorUserId: userId });
+      await audit.record({
+        action: AuditAction.ProfileUpdated,
+        actorUserId: userId,
+      });
     }
 
     const rows = await prisma.$queryRawUnsafe<Array<{ seq: bigint }>>(
@@ -204,7 +224,10 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
       `ALTER TABLE audit.event DISABLE TRIGGER audit_event_append_only`,
     );
     try {
-      await prisma.$executeRawUnsafe(`DELETE FROM audit.event WHERE seq = $1`, middle);
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM audit.event WHERE seq = $1`,
+        middle,
+      );
 
       const breaks = await audit.verifyChain();
       expect(breaks).toHaveLength(1);
@@ -212,7 +235,10 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
     } finally {
       // Everything from the break onward is unreconstructable, which is the
       // correct real-world consequence too.
-      await prisma.$executeRawUnsafe(`DELETE FROM audit.event WHERE seq >= $1`, middle);
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM audit.event WHERE seq >= $1`,
+        middle,
+      );
       await prisma.$executeRawUnsafe(
         `ALTER TABLE audit.event ENABLE TRIGGER audit_event_append_only`,
       );
@@ -232,7 +258,10 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
       `ALTER TABLE audit.event DISABLE TRIGGER audit_event_append_only`,
     );
     try {
-      await prisma.$executeRawUnsafe(`DELETE FROM audit.event WHERE seq = $1`, headBefore!.seq);
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM audit.event WHERE seq = $1`,
+        headBefore!.seq,
+      );
 
       // The chain is still internally consistent. This is the gap.
       expect(await audit.verifyChain()).toEqual([]);
@@ -248,13 +277,18 @@ describe('and tampering that bypasses those triggers is DETECTABLE', () => {
   }, 30_000);
 
   it('keeps chaining correctly after all that', async () => {
-    const id = await audit.record({ action: AuditAction.SessionsRevokedAll, actorUserId: userId });
+    const id = await audit.record({
+      action: AuditAction.SessionsRevokedAll,
+      actorUserId: userId,
+    });
     expect(id).toBeTruthy();
     expect(await audit.verifyChain()).toEqual([]);
   }, 20_000);
 
   it('links each row to the one before it', async () => {
-    const rows = await prisma.$queryRawUnsafe<Array<{ prev: string; hash: string; seq: bigint }>>(
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ prev: string; hash: string; seq: bigint }>
+    >(
       `SELECT seq, encode(prev_hash,'hex') AS prev, encode(hash,'hex') AS hash
          FROM audit.event ORDER BY seq DESC LIMIT 2`,
     );

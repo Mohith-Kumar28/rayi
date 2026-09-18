@@ -50,6 +50,21 @@ async function bootstrap() {
     }),
     {
       bufferLogs: true,
+      /*
+       * Keeps the raw request bytes on `request.rawBody`.
+       *
+       * A webhook signature is computed over the EXACT bytes the provider sent.
+       * Re-serialising the parsed body produces a different string — whitespace,
+       * number formatting, duplicate keys and key order all change — and the
+       * signature then never matches. That failure fails closed and looks like an
+       * attack: every delivery rejected as unauthenticated, logs full of
+       * signature mismatches, and nothing pointing at the parser.
+       *
+       * Nest's own option rather than a hand-registered content-type parser:
+       * Nest registers its JSON parser during `init()`, so adding one manually
+       * collides with it.
+       */
+      rawBody: true,
     },
   );
 

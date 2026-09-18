@@ -84,6 +84,23 @@ module.exports = {
     },
 
     {
+      name: 'webhook-interpretation-is-not-http-reachable',
+      severity: 'error',
+      comment:
+        'A webhook handler that also interprets the delivery has the PROVIDER\'s retry policy wired ' +
+        'to our processing time: a slow interpreter becomes a timeout, a timeout becomes a retry, ' +
+        'and a bug becomes a lost delivery once the provider gives up. For Stripe that is a ' +
+        'three-day fuse on a silent money bug. So the controller may store a delivery and nothing ' +
+        'more; the worker reads it back.',
+      from: {
+        path: '^src/(app\\.module\\.ts|main\\.ts|api/(?!webhooks/webhooks-worker\\.module|webhooks/resend-webhook\\.(service|poller)))',
+      },
+      to: {
+        path: '^src/api/webhooks/(resend-webhook\\.service|resend-webhook\\.poller|webhooks-worker\\.module)',
+      },
+    },
+
+    {
       name: 'ledger-is-not-http-reachable',
       severity: 'error',
       comment:

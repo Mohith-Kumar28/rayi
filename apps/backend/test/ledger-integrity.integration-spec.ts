@@ -16,10 +16,13 @@ import { LedgerIntegrityService } from '../src/ledger/infrastructure/ledger-inte
  */
 
 const DATABASE_URL =
-  process.env.LEDGER_TEST_DATABASE_URL ?? 'postgresql://rayi:rayi@localhost:55432/rayi';
+  process.env.LEDGER_TEST_DATABASE_URL ??
+  'postgresql://rayi:rayi@localhost:55432/rayi';
 
 const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
-const integrity = new LedgerIntegrityService(prisma as unknown as PrismaService);
+const integrity = new LedgerIntegrityService(
+  prisma as unknown as PrismaService,
+);
 
 /**
  * Runs `sql`, then restores with `undo` whatever the assertions do.
@@ -29,7 +32,9 @@ const integrity = new LedgerIntegrityService(prisma as unknown as PrismaService)
  * statement-injection primitive.
  */
 async function run(statements: string | readonly string[]): Promise<void> {
-  for (const statement of typeof statements === 'string' ? [statements] : statements) {
+  for (const statement of typeof statements === 'string'
+    ? [statements]
+    : statements) {
     await prisma.$executeRawUnsafe(statement);
   }
 }
@@ -113,7 +118,9 @@ describe('and a database missing a control does NOT', () => {
       `CREATE TRIGGER entry_append_only BEFORE UPDATE OR DELETE ON ledger.entry
          FOR EACH ROW EXECUTE FUNCTION ledger.refuse_mutation()`,
       (failures) => {
-        expect(failures.join('\n')).toMatch(/MISSING TRIGGER ledger\.entry\.entry_append_only/);
+        expect(failures.join('\n')).toMatch(
+          /MISSING TRIGGER ledger\.entry\.entry_append_only/,
+        );
       },
     );
     expect(await integrity.verify()).toEqual([]);
@@ -139,7 +146,9 @@ describe('and a database missing a control does NOT', () => {
            FOR EACH ROW EXECUTE FUNCTION ledger.assert_entry_balanced()`,
       ],
       (failures) => {
-        expect(failures.join('\n')).toMatch(/not DEFERRABLE INITIALLY DEFERRED/);
+        expect(failures.join('\n')).toMatch(
+          /not DEFERRABLE INITIALLY DEFERRED/,
+        );
       },
     );
     expect(await integrity.verify()).toEqual([]);
@@ -150,7 +159,9 @@ describe('and a database missing a control does NOT', () => {
       `ALTER FUNCTION ledger.post_entry(text, text, text, jsonb, uuid, text, text) SECURITY INVOKER`,
       `ALTER FUNCTION ledger.post_entry(text, text, text, jsonb, uuid, text, text) SECURITY DEFINER`,
       (failures) => {
-        expect(failures.join('\n')).toMatch(/post_entry\(\) is not SECURITY DEFINER/);
+        expect(failures.join('\n')).toMatch(
+          /post_entry\(\) is not SECURITY DEFINER/,
+        );
       },
     );
     expect(await integrity.verify()).toEqual([]);
@@ -188,7 +199,9 @@ describe('and a database missing a control does NOT', () => {
     await prisma.$executeRawUnsafe(
       `ALTER TABLE ledger.account_balance DROP CONSTRAINT account_balance_non_negative`,
     );
-    await prisma.$executeRawUnsafe(`ALTER TABLE ledger.entry DROP CONSTRAINT entry_source_key`);
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE ledger.entry DROP CONSTRAINT entry_source_key`,
+    );
     try {
       const failures = await integrity.verify();
       expect(failures.length).toBeGreaterThanOrEqual(2);

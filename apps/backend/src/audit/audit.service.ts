@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '@/database/prisma.service';
 
-import type { AuditEvent, AuditEventInput, AuditHead, ChainBreak } from './audit.types';
+import type {
+  AuditEvent,
+  AuditEventInput,
+  AuditHead,
+  ChainBreak,
+} from './audit.types';
 
 /**
  * The audit log.
@@ -135,7 +140,9 @@ export class AuditService {
    * with database access wanted it to say.
    */
   async verifyChain(from = 0n): Promise<ChainBreak[]> {
-    const rows = await this.prisma.$queryRaw<Array<{ bad_seq: bigint; reason: string }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ bad_seq: bigint; reason: string }>
+    >`
       SELECT bad_seq, reason FROM audit.verify_chain(${from}::bigint)
     `;
     return rows.map((row) => ({ seq: row.bad_seq, reason: row.reason }));

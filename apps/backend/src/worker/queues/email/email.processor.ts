@@ -35,6 +35,10 @@ export class EmailProcessor extends WorkerHost {
         return await this.emailQueueService.sendMagicLink(job.data);
       case EmailJob.ResetPassword:
         return await this.emailQueueService.resetPassword(job.data);
+      case EmailJob.EmailChangeConfirm:
+        return await this.emailQueueService.emailChangeConfirm(job.data);
+      case EmailJob.EmailChangeNotice:
+        return await this.emailQueueService.emailChangeNotice(job.data);
       default:
         throw new Error(`Unhandled job named: ${(job as any).name}`);
     }

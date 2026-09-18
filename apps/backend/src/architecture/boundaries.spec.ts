@@ -141,6 +141,22 @@ describe('and the rules actually fire when broken', () => {
     }
   }, 120_000);
 
+  it('catches the webhook CONTROLLER importing the interpreter', () => {
+    // A handler that also interprets has the provider's retry policy wired to
+    // our processing time — a slow interpreter becomes a lost delivery.
+    const violations = cruise({
+      path: 'src/api/health/breach4.controller.ts',
+      source: [
+        "import { ResendWebhookService } from '@/api/webhooks/resend-webhook.service';",
+        'export const breach = ResendWebhookService;',
+      ].join('\n'),
+    });
+
+    expect(violations.map((violation) => violation.rule.name)).toContain(
+      'webhook-interpretation-is-not-http-reachable',
+    );
+  }, 120_000);
+
   it('catches a treasury use case importing the ledger', () => {
     const violations = cruise({
       path: 'src/treasury/use-cases/breach.use-case.ts',

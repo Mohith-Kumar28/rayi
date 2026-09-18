@@ -189,7 +189,8 @@ export class AllocateBudgetUseCase {
           existing.campaignId === input.campaignId &&
           existing.amountMinor === input.amountMinor &&
           existing.currency === input.currency &&
-          existing.expectedAvailableMinor === (input.expectedAvailableMinor ?? null);
+          existing.expectedAvailableMinor ===
+            (input.expectedAvailableMinor ?? null);
 
         if (!sameRequest) {
           this.logger.warn(

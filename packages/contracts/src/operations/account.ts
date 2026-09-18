@@ -124,10 +124,115 @@ export const listMyActivity = defineOperation({
   errors: ['unauthenticated'],
 });
 
+
+
+// ---------------------------------------------------------------------------
+// Step-up
+// ---------------------------------------------------------------------------
+
+export const STEP_UP_PURPOSES = [
+  'account:change_email',
+  'account:disable_two_factor',
+  'account:enable_two_factor',
+  'member:change_role',
+  'member:remove',
+  'money_authority:grant',
+  'funds:release',
+] as const;
+
+export const StartStepUpBodySchema = z.object({
+  purpose: z.enum(STEP_UP_PURPOSES),
+  /** The six-digit code from the authenticator app. */
+  code: z.string().regex(/^\s*\d{3}\s*\d{3}\s*$|^\d{6}$/, 'Enter the six-digit code.'),
+  /**
+   * Binds the grant to the exact thing being confirmed — computed by the SERVER
+   * from the request that follows, never sent by the client.
+   *
+   * It is absent from this schema on purpose. A client-supplied binding is not a
+   * binding: whoever sends it chooses what the grant covers.
+   */
+});
+
+export const startStepUp = defineOperation({
+  operationId: 'startStepUp',
+  method: 'post',
+  path: '/v1/me/step-up',
+  summary: 'Confirm your identity before a sensitive action',
+  description:
+    'Verifies a code from your authenticator app and mints a short-lived, single-use grant bound ' +
+    'to one purpose. A session cannot prove who is at the keyboard right now — it was established ' +
+    'once, possibly days ago, possibly on a device that is no longer in your hands.',
+  tags: ['account'],
+  access: { kind: 'self' },
+  body: StartStepUpBodySchema,
+  successStatus: 200,
+  response: z.object({ expiresAt: z.iso.datetime() }),
+  errors: ['unauthenticated', 'forbidden', 'validation_failed', 'step_up_required'],
+});
+
+// ---------------------------------------------------------------------------
+// Email change
+// ---------------------------------------------------------------------------
+
+export const RequestEmailChangeBodySchema = z.object({
+  newEmail: z.email().max(255),
+  /** Required. Changing the address that receives magic links is account takeover. */
+  code: z.string().min(6).max(12),
+});
+
+export const requestEmailChange = defineOperation({
+  operationId: 'requestEmailChange',
+  method: 'post',
+  path: '/v1/me/email',
+  summary: 'Start changing your email address',
+  description:
+    'Needs a fresh authenticator code, and notifies the OLD address. The address that receives ' +
+    'magic links IS the account, so changing it is the highest-value takeover step available — ' +
+    'and the person who must hear about it is whoever holds the address today.',
+  tags: ['account'],
+  access: { kind: 'self', stepUp: true },
+  body: RequestEmailChangeBodySchema,
+  successStatus: 202,
+  response: z.object({ status: z.enum(['pending_confirmation']) }),
+  errors: ['unauthenticated', 'forbidden', 'validation_failed', 'conflict', 'step_up_required'],
+});
+
+// ---------------------------------------------------------------------------
+// Two-factor
+// ---------------------------------------------------------------------------
+
+export const DisableTwoFactorBodySchema = z.object({
+  code: z.string().min(6).max(12),
+});
+
+export const disableTwoFactor = defineOperation({
+  operationId: 'disableTwoFactor',
+  method: 'post',
+  path: '/v1/me/two-factor/disable',
+  summary: 'Remove your authenticator app',
+  description:
+    'Needs a code from the factor being removed, so possession of the session alone is not ' +
+    'enough. Better Auth exposes this with nothing but a session cookie, which is why its version ' +
+    'is blocked at the mount.',
+  tags: ['account'],
+  access: { kind: 'self', stepUp: true },
+  body: DisableTwoFactorBodySchema,
+  successStatus: 200,
+  response: z.object({ twoFactorEnabled: z.boolean() }),
+  errors: ['unauthenticated', 'forbidden', 'validation_failed', 'step_up_required'],
+});
+
+export const ACCOUNT_SECURITY_OPERATIONS = [
+  startStepUp,
+  requestEmailChange,
+  disableTwoFactor,
+] as const;
+
 export const ACCOUNT_OPERATIONS = [
   listMySessions,
   revokeMySession,
   revokeMyOtherSessions,
   updateMyProfile,
   listMyActivity,
+  ...ACCOUNT_SECURITY_OPERATIONS,
 ] as const;

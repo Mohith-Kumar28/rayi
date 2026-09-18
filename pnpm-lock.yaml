@@ -13090,7 +13090,7 @@ snapshots:
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 22.20.3
+      '@types/node': 24.13.5
 
   '@types/shimmer@1.2.0': {}
 

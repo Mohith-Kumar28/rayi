@@ -113,7 +113,8 @@ export const ALLOWED_AUTH_ROUTES: readonly AllowedAuthRoute[] = [
 export const BLOCKED_AUTH_ROUTES: Readonly<Record<string, string>> = {
   '/sign-in/email': 'Passwords are disabled. Sign in with a magic link.',
   '/sign-in/username': 'Passwords are disabled.',
-  '/sign-up/email': 'Accounts are created by invitation, through a Rayi controller.',
+  '/sign-up/email':
+    'Accounts are created by invitation, through a Rayi controller.',
   '/change-password': 'Passwords are disabled.',
   '/request-password-reset': 'Passwords are disabled.',
   '/reset-password': 'Passwords are disabled.',
@@ -123,15 +124,19 @@ export const BLOCKED_AUTH_ROUTES: Readonly<Record<string, string>> = {
     'Profile changes go through a Rayi controller so they carry an audit row. Better Auth would let any session mutate the user unchecked.',
   '/change-email':
     'Changing the address that receives magic links is an account-takeover primitive. Needs step-up and notification to the OLD address.',
-  '/delete-user': 'Account deletion needs a Rayi flow: outstanding balances, 1099 retention, holds.',
+  '/delete-user':
+    'Account deletion needs a Rayi flow: outstanding balances, 1099 retention, holds.',
   '/delete-user/callback': 'Same.',
   '/two-factor/enable':
     'Enrolment is a security-state change and belongs behind step-up with an audit row.',
   '/two-factor/disable':
     'REMOVING a second factor, reachable with only a session cookie, is the single worst endpoint in the default surface.',
-  '/two-factor/get-totp-uri': 'Exposes the TOTP secret to anyone holding a session.',
-  '/two-factor/generate-backup-codes': 'Minting new recovery codes bypasses the existing factor.',
-  '/list-sessions': 'Session management belongs in a Rayi surface that can audit it.',
+  '/two-factor/get-totp-uri':
+    'Exposes the TOTP secret to anyone holding a session.',
+  '/two-factor/generate-backup-codes':
+    'Minting new recovery codes bypasses the existing factor.',
+  '/list-sessions':
+    'Session management belongs in a Rayi surface that can audit it.',
   '/revoke-session': 'Same.',
   '/revoke-sessions': 'Same.',
   '/revoke-other-sessions': 'Same.',
@@ -154,7 +159,11 @@ export const BLOCKED_AUTH_ROUTES: Readonly<Record<string, string>> = {
 function toPattern(path: string): RegExp {
   const source = path
     .split('/')
-    .map((segment) => (segment.startsWith(':') ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .map((segment) =>
+      segment.startsWith(':')
+        ? '[^/]+'
+        : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    )
     .join('/');
   return new RegExp(`^${source}$`);
 }
@@ -172,9 +181,12 @@ const COMPILED = ALLOWED_AUTH_ROUTES.map((route) => ({
  * open for POST, and several Better Auth handlers behave differently per method.
  */
 export function isAllowedAuthRoute(method: string, path: string): boolean {
-  const normalised = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  const normalised =
+    path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
   const upper = method.toUpperCase();
-  return COMPILED.some((route) => route.methods.has(upper) && route.pattern.test(normalised));
+  return COMPILED.some(
+    (route) => route.methods.has(upper) && route.pattern.test(normalised),
+  );
 }
 
 /**
@@ -202,7 +214,8 @@ export function shouldServeAuthRequest(
 
   // `%2e%2e` and friends are already decoded by URL parsing, so a traversal
   // attempt arrives here as literal `..` and simply fails to match any pattern.
-  if (!pathname.startsWith(`${basePath}/`) && pathname !== basePath) return false;
+  if (!pathname.startsWith(`${basePath}/`) && pathname !== basePath)
+    return false;
 
   const subPath = pathname.slice(basePath.length) || '/';
   return isAllowedAuthRoute(method, subPath);

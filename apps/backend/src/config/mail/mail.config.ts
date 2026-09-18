@@ -1,7 +1,17 @@
 import { registerAs } from '@nestjs/config';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Validate } from 'class-validator';
-import type { ValidationArguments, ValidatorConstraintInterface } from 'class-validator';
-import { ValidatorConstraint } from 'class-validator';
+import type {
+  ValidationArguments,
+  ValidatorConstraintInterface,
+} from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  Validate,
+  ValidatorConstraint,
+} from 'class-validator';
 import process from 'node:process';
 
 import { isWorkerProcess } from '@/utils/config/is-worker-process';
@@ -73,6 +83,16 @@ class EnvironmentVariablesValidator {
   @IsEmail()
   @IsOptional()
   MAIL_REDIRECT_ALL_TO: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^whsec_/, {
+    message:
+      'RESEND_WEBHOOK_SECRET must be the Svix signing secret, which begins whsec_. ' +
+      'A wrong value here fails every signature check, and the endpoint then looks like it is ' +
+      'under attack rather than misconfigured.',
+  })
+  RESEND_WEBHOOK_SECRET: string;
 }
 
 export function getConfig(): MailConfig {
@@ -85,6 +105,9 @@ export function getConfig(): MailConfig {
   if (process.env.MAIL_REPLY_TO) config.replyTo = process.env.MAIL_REPLY_TO;
   if (process.env.MAIL_REDIRECT_ALL_TO) {
     config.redirectAllTo = process.env.MAIL_REDIRECT_ALL_TO;
+  }
+  if (process.env.RESEND_WEBHOOK_SECRET) {
+    config.webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
   }
 
   return config;

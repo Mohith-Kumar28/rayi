@@ -41,10 +41,9 @@ describe('the Better Auth surface is what we reviewed', () => {
     // The snapshot records methods too, so an allowlist entry that permits only
     // POST on a GET-only endpoint is a silent denial.
     const byPath = new Map(
-      (SNAPSHOT as ReadonlyArray<{ path: string; methods: string[] }>).map((endpoint) => [
-        endpoint.path,
-        endpoint.methods,
-      ]),
+      (SNAPSHOT as ReadonlyArray<{ path: string; methods: string[] }>).map(
+        (endpoint) => [endpoint.path, endpoint.methods],
+      ),
     );
 
     // Collected rather than asserted one at a time, so a failure names every
@@ -58,7 +57,9 @@ describe('the Better Auth surface is what we reviewed', () => {
       }
       for (const method of route.methods) {
         if (!actual.includes(method)) {
-          mismatches.push(`${route.path} does not serve ${method} (serves ${actual.join(', ')})`);
+          mismatches.push(
+            `${route.path} does not serve ${method} (serves ${actual.join(', ')})`,
+          );
         }
       }
     }
@@ -78,7 +79,9 @@ describe('the Better Auth surface is what we reviewed', () => {
 
   it('never both allows and blocks the same path', () => {
     const allowed = ALLOWED_AUTH_ROUTES.map((route) => route.path);
-    const contradictions = allowed.filter((path) => path in BLOCKED_AUTH_ROUTES);
+    const contradictions = allowed.filter(
+      (path) => path in BLOCKED_AUTH_ROUTES,
+    );
     expect(contradictions).toEqual([]);
   });
 
@@ -86,7 +89,9 @@ describe('the Better Auth surface is what we reviewed', () => {
     // A typo in an allowlist entry denies something it meant to permit, and the
     // symptom is "sign-in is broken" with nothing pointing here.
     const real = new Set<string>(KNOWN_AUTH_SURFACE);
-    const phantom = ALLOWED_AUTH_ROUTES.filter((route) => !real.has(route.path));
+    const phantom = ALLOWED_AUTH_ROUTES.filter(
+      (route) => !real.has(route.path),
+    );
     expect(phantom.map((route) => route.path)).toEqual([]);
   });
 
@@ -121,7 +126,9 @@ describe('the matcher denies by default', () => {
   });
 
   it('blocks a path nobody has ever heard of, which is the point', () => {
-    expect(isAllowedAuthRoute('POST', '/some-future-plugin/do-anything')).toBe(false);
+    expect(isAllowedAuthRoute('POST', '/some-future-plugin/do-anything')).toBe(
+      false,
+    );
     expect(isAllowedAuthRoute('GET', '/reference')).toBe(false);
     expect(isAllowedAuthRoute('GET', '/open-api/generate-schema')).toBe(false);
   });
@@ -158,7 +165,8 @@ describe('the matcher denies by default', () => {
 
 describe('the decision the mount actually makes, from a raw URL', () => {
   const MOUNT = '/api/auth';
-  const serve = (method: string, url: string) => shouldServeAuthRequest(MOUNT, method, url);
+  const serve = (method: string, url: string) =>
+    shouldServeAuthRequest(MOUNT, method, url);
 
   it('serves an allowed route under the mount', () => {
     expect(serve('GET', '/api/auth/get-session')).toBe(true);
@@ -174,7 +182,9 @@ describe('the decision the mount actually makes, from a raw URL', () => {
   });
 
   it('keeps serving an allowed route that carries a query string', () => {
-    expect(serve('GET', '/api/auth/magic-link/verify?token=abc&callbackURL=/')).toBe(true);
+    expect(
+      serve('GET', '/api/auth/magic-link/verify?token=abc&callbackURL=/'),
+    ).toBe(true);
   });
 
   it('refuses a path outside the mount', () => {

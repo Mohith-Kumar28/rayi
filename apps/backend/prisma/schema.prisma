@@ -42,6 +42,9 @@ model User {
     twoFactors TwoFactor[]
 
     // Created/Updated by relations
+    stepUpGrants        StepUpGrant[]
+    emailChangeRequests EmailChangeRequest[]
+
     createdFiles File[] @relation("CreatedFiles")
     updatedFiles File[] @relation("UpdatedFiles")
     deletedFiles File[] @relation("DeletedFiles")
@@ -184,8 +187,9 @@ model Organization {
     metadata  String?
     createdAt DateTime @default(now())
 
-    members    Member[]
-    workspaces Workspace[]
+    members     Member[]
+    workspaces  Workspace[]
+    invitations Invitation[]
 
     @@map("organization")
 }
@@ -414,4 +418,216 @@ model Campaign {
     @@unique([idUuid, organizationIdUuid], map: "campaign_uuid_parentage_key")
     @@index([organizationId, state])
     @@map("campaign")
+}
+
+/// Every webhook we receive, stored RAW before anything interprets it.
+///
+/// "Verify the signature, insert the raw event, return 200, and do nothing
+/// else." Interpretation happens later, from the stored row, in a process the
+/// provider cannot reach — so a slow handler, a bug, or a downstream outage
+/// never costs us a delivery. A provider that gets a non-200 retries on its own
+/// schedule and then gives up; for Stripe that is a three-day fuse on a silent
+/// money bug.
+///
+/// The body is kept as TEXT, exactly as received, not as parsed JSON. It is the
+/// evidence: the signature was computed over those bytes, so re-deriving it
+/// later must use those bytes. Parsing to jsonb would reorder keys, collapse
+/// duplicates and normalise numbers, and the stored row would no longer verify.
+model WebhookEvent {
+    id String @id @default(uuid())
+
+    /// 'resend' | 'stripe_platform' | 'stripe_connect'
+    source String
+
+    /// The PROVIDER's id for this delivery. Idempotency lives here: a provider
+    /// retrying a delivery it already made must not produce a second row, and a
+    /// retry is the normal case, not an exception.
+    externalId String
+
+    /// Declared by the payload. Recorded for routing and never trusted: the
+    /// handler re-reads whatever it needs from the body or from the provider.
+    eventType String
+
+    /// Raw bytes as received. See above.
+    payload String
+
+    /// Verbatim, for forensics. A dispute about what a provider sent is settled
+    /// by replaying the signature over the stored body with the stored headers.
+    headers Json
+
+    receivedAt DateTime @default(now())
+
+    /// pending | processed | failed | ignored
+    status        String    @default("pending")
+    processedAt   DateTime?
+    failureReason String?
+    attempts      Int       @default(0)
+
+    /// One row per provider delivery. This unique index IS the idempotency
+    /// guarantee — not an application check that a future code path can skip.
+    @@unique([source, externalId])
+    @@index([status, receivedAt])
+    @@index([source, eventType, receivedAt])
+    @@map("webhook_event")
+}
+
+/// Addresses we must stop emailing.
+///
+/// A hard bounce means the mailbox does not exist. Continuing to send damages
+/// the sending domain's reputation, which degrades delivery for every other
+/// user — so one dead address quietly makes everyone else's sign-in links less
+/// likely to arrive.
+///
+/// It also makes a real failure VISIBLE. Without this, a creator whose address
+/// is dead looks exactly like one who has not read their email, and the first
+/// symptom is an unexplained missing payout.
+model EmailSuppression {
+    id String @id @default(uuid())
+
+    /// Lower-cased on write. Uniqueness is enforced by a FUNCTIONAL index on
+    /// `lower(email)`, which Prisma cannot express — so there is deliberately no
+    /// `@unique` here.
+    ///
+    /// A plain `@unique` on the raw column would let `A@b.com` be inserted
+    /// alongside a suppression on `a@b.com`, and the second address would keep
+    /// receiving mail. Lower-casing in application code is a convention a future
+    /// path can forget; the index is not.
+    ///
+    /// Consequence: look these up with `findFirst`, never `findUnique`.
+    email String
+
+    /// hard_bounce | complaint | manual
+    reason String
+
+    /// The webhook that caused it, so a suppression can always be explained.
+    webhookEventId String?
+
+    suppressedAt DateTime  @default(now())
+    /// Set when a human clears it — a bounce can be a temporary mail-server
+    /// misconfiguration, so this must be reversible.
+    liftedAt     DateTime?
+    liftedBy     String?
+
+    @@index([reason, suppressedAt])
+    @@map("email_suppression")
+}
+
+/// Proof that the person at the keyboard held the second factor, a moment ago.
+///
+/// Not a flag on the session. A session lasts days; a step-up must last minutes,
+/// and it must be bound to the SPECIFIC thing being confirmed.
+///
+/// The binding is the part that is easy to get wrong. A grant that says only
+/// "this user stepped up" is a bearer capability: confirm a harmless action,
+/// then spend the grant on a dangerous one within the window. The money-integrity
+/// review found exactly this — a bulk-approve grant that was neither
+/// single-use nor resource-bound became "five minutes of unlimited releases".
+model StepUpGrant {
+    id     String @id @default(uuid())
+    userId String
+
+    /// What this grant authorises, e.g. 'account:change_email'. One purpose per
+    /// grant: a grant minted to change an email cannot remove a second factor.
+    purpose String
+
+    /// A hash of the exact resource and terms being confirmed — the campaign id
+    /// and amount, the member and the new role. NULL only where the purpose has
+    /// no parameters at all.
+    ///
+    /// Without it, confirming "$10 to campaign A" authorises "$10,000 to
+    /// campaign B" for as long as the grant lives.
+    resourceHash String?
+
+    /// Almost always 1. A grant that can be spent twice is a grant that can be
+    /// spent on something the user did not see.
+    usesRemaining Int @default(1)
+
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    /// Set when spent. Kept rather than deleted so "was this confirmed, and
+    /// when" is answerable afterwards.
+    consumedAt DateTime?
+
+    /// Forensics: the request that minted it.
+    ipAddress String?
+    userAgent String?
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    /// The consume path's index: find a live grant for this user, purpose and
+    /// resource.
+    @@index([userId, purpose, expiresAt])
+    @@map("step_up_grant")
+}
+
+/// A pending email change, awaiting confirmation at the NEW address.
+///
+/// Two-sided on purpose. The step-up proves the person asking holds the second
+/// factor; confirming at the new address proves they can actually receive mail
+/// there. Skipping the second half lets a typo lock someone out of their own
+/// account permanently — the new address is where every future magic link goes.
+///
+/// The OLD address is notified when the change is requested, not when it
+/// completes. Whoever holds the address today is the person who needs to hear
+/// about it while there is still time to object.
+model EmailChangeRequest {
+    id     String @id @default(uuid())
+    userId String
+
+    /// Recorded so a notification can say what it is changing FROM, and so the
+    /// audit trail survives the user row being updated.
+    oldEmail String
+    newEmail String
+
+    /// SHA-256 of the confirmation token. The token itself is never stored: a
+    /// database read would otherwise hand over a working account-takeover link.
+    tokenHash String @unique
+
+    expiresAt   DateTime
+    createdAt   DateTime  @default(now())
+    confirmedAt DateTime?
+    /// Set when the user follows the cancel link in the notification to the OLD
+    /// address. That link is the point of notifying them.
+    cancelledAt DateTime?
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId, expiresAt])
+    @@map("email_change_request")
+}
+
+/// A pending invitation to an organization.
+///
+/// Rayi's own, not Better Auth's. Its `/organization/invite-member` endpoint is
+/// blocked at the mount because it bypasses the Nest guard chain entirely: no
+/// step-up, no audit row, and no ceiling on the role being offered.
+///
+/// An invitation can only ever produce a ROLE. Money capability is a separate
+/// `MoneyAuthority` row that this table cannot create — so the escalation the
+/// security review found ("an admin invites a mailbox they control at a
+/// money-bearing role") has no path here.
+model Invitation {
+    id             String @id @default(uuid())
+    organizationId String
+
+    /// Lower-cased, like every address we compare.
+    email String
+    role  String
+
+    /// SHA-256 of the acceptance token. Never the token: a database read must
+    /// not hand over a way into someone else's organization.
+    tokenHash String @unique
+
+    invitedBy String
+    expiresAt DateTime
+    createdAt DateTime  @default(now())
+    acceptedAt DateTime?
+    revokedAt  DateTime?
+
+    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    @@index([organizationId, email])
+    @@index([expiresAt])
+    @@map("invitation")
 }

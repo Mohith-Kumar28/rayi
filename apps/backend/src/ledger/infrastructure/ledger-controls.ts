@@ -50,7 +50,8 @@ export const EXPECTED_CONSTRAINTS: readonly ExpectedCheck[] = [
   {
     table: 'ledger.entry',
     name: 'entry_source_key',
-    guards: 'Idempotency. Without it a replayed webhook or retried job posts twice.',
+    guards:
+      'Idempotency. Without it a replayed webhook or retried job posts twice.',
   },
   {
     table: 'ledger.account',
@@ -118,12 +119,14 @@ export const EXPECTED_FUNCTIONS: readonly ExpectedFunction[] = [
   {
     name: 'post_entry',
     securityDefiner: true,
-    guards: 'The only door into the ledger. Callers need EXECUTE on this and nothing else.',
+    guards:
+      'The only door into the ledger. Callers need EXECUTE on this and nothing else.',
   },
   {
     name: 'create_account',
     securityDefiner: true,
-    guards: 'An account and its balance row are created together, or not at all.',
+    guards:
+      'An account and its balance row are created together, or not at all.',
   },
   {
     name: 'account_for_campaign',

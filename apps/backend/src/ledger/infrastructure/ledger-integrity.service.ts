@@ -1,4 +1,8 @@
-import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 
 import { PrismaService } from '@/database/prisma.service';
 
@@ -90,7 +94,9 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
     }
 
     // ---- constraints -------------------------------------------------------
-    const constraints = await this.prisma.$queryRaw<Array<{ name: string; table: string }>>`
+    const constraints = await this.prisma.$queryRaw<
+      Array<{ name: string; table: string }>
+    >`
       SELECT c.conname AS name,
              n.nspname || '.' || t.relname AS table
         FROM pg_constraint c
@@ -98,16 +104,25 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
         JOIN pg_namespace n ON n.oid = t.relnamespace
        WHERE n.nspname = 'ledger'
     `;
-    const haveConstraint = new Set(constraints.map((row) => `${row.table}:${row.name}`));
+    const haveConstraint = new Set(
+      constraints.map((row) => `${row.table}:${row.name}`),
+    );
     for (const expected of EXPECTED_CONSTRAINTS) {
       if (!haveConstraint.has(`${expected.table}:${expected.name}`)) {
-        failures.push(`MISSING CONSTRAINT ${expected.table}.${expected.name} — ${expected.guards}`);
+        failures.push(
+          `MISSING CONSTRAINT ${expected.table}.${expected.name} — ${expected.guards}`,
+        );
       }
     }
 
     // ---- triggers ----------------------------------------------------------
     const triggers = await this.prisma.$queryRaw<
-      Array<{ name: string; table: string; deferrable: boolean; initdeferred: boolean }>
+      Array<{
+        name: string;
+        table: string;
+        deferrable: boolean;
+        initdeferred: boolean;
+      }>
     >`
       SELECT tg.tgname AS name,
              n.nspname || '.' || t.relname AS table,
@@ -118,11 +133,15 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
         JOIN pg_namespace n ON n.oid = t.relnamespace
        WHERE n.nspname = 'ledger' AND NOT tg.tgisinternal
     `;
-    const triggersByKey = new Map(triggers.map((row) => [`${row.table}:${row.name}`, row]));
+    const triggersByKey = new Map(
+      triggers.map((row) => [`${row.table}:${row.name}`, row]),
+    );
     for (const expected of EXPECTED_TRIGGERS) {
       const found = triggersByKey.get(`${expected.table}:${expected.name}`);
       if (!found) {
-        failures.push(`MISSING TRIGGER ${expected.table}.${expected.name} — ${expected.guards}`);
+        failures.push(
+          `MISSING TRIGGER ${expected.table}.${expected.name} — ${expected.guards}`,
+        );
         continue;
       }
       if (expected.deferrable && !(found.deferrable && found.initdeferred)) {
@@ -137,7 +156,9 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
     }
 
     // ---- functions ---------------------------------------------------------
-    const functions = await this.prisma.$queryRaw<Array<{ name: string; secdef: boolean }>>`
+    const functions = await this.prisma.$queryRaw<
+      Array<{ name: string; secdef: boolean }>
+    >`
       SELECT p.proname AS name, p.prosecdef AS secdef
         FROM pg_proc p
         JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -147,7 +168,9 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
     for (const expected of EXPECTED_FUNCTIONS) {
       const found = functionsByName.get(expected.name);
       if (!found) {
-        failures.push(`MISSING FUNCTION ledger.${expected.name}() — ${expected.guards}`);
+        failures.push(
+          `MISSING FUNCTION ledger.${expected.name}() — ${expected.guards}`,
+        );
         continue;
       }
       if (expected.securityDefiner && !found.secdef) {
@@ -162,7 +185,9 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
     }
 
     // ---- unique indexes ----------------------------------------------------
-    const indexes = await this.prisma.$queryRaw<Array<{ name: string; table: string }>>`
+    const indexes = await this.prisma.$queryRaw<
+      Array<{ name: string; table: string }>
+    >`
       SELECT i.relname AS name,
              n.nspname || '.' || t.relname AS table
         FROM pg_index x
@@ -174,17 +199,23 @@ export class LedgerIntegrityService implements OnApplicationBootstrap {
     const haveIndex = new Set(indexes.map((row) => `${row.table}:${row.name}`));
     for (const expected of EXPECTED_UNIQUE_INDEXES) {
       if (!haveIndex.has(`${expected.table}:${expected.name}`)) {
-        failures.push(`MISSING UNIQUE INDEX ${expected.name} on ${expected.table} — ${expected.guards}`);
+        failures.push(
+          `MISSING UNIQUE INDEX ${expected.name} on ${expected.table} — ${expected.guards}`,
+        );
       }
     }
 
     // ---- generated columns -------------------------------------------------
-    const generated = await this.prisma.$queryRaw<Array<{ table: string; column: string }>>`
+    const generated = await this.prisma.$queryRaw<
+      Array<{ table: string; column: string }>
+    >`
       SELECT table_schema || '.' || table_name AS table, column_name AS column
         FROM information_schema.columns
        WHERE table_schema = 'ledger' AND is_generated = 'ALWAYS'
     `;
-    const haveGenerated = new Set(generated.map((row) => `${row.table}:${row.column}`));
+    const haveGenerated = new Set(
+      generated.map((row) => `${row.table}:${row.column}`),
+    );
     for (const expected of EXPECTED_GENERATED_COLUMNS) {
       if (!haveGenerated.has(`${expected.table}:${expected.column}`)) {
         failures.push(

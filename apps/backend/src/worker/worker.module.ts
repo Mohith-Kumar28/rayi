@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { WebhooksWorkerModule } from '@/api/webhooks/webhooks-worker.module';
 import { TreasuryWorkerModule } from '@/treasury/treasury-worker.module';
 
 import { EmailQueueModule } from './queues/email/email.module';
@@ -17,8 +18,12 @@ import { EmailQueueModule } from './queues/email/email.module';
  *                           duplicate email is an annoyance.
  *   `TreasuryWorkerModule`  Postgres-backed. A duplicate is money, and Redis
  *                           cannot join the transaction that writes the intent.
+ *
+ * `WebhooksWorkerModule` interprets deliveries the api stored. It lives here and
+ * not in the api so that a slow or failing interpretation cannot become a
+ * provider timeout, and therefore cannot become a lost delivery.
  */
 @Module({
-  imports: [EmailQueueModule, TreasuryWorkerModule],
+  imports: [EmailQueueModule, TreasuryWorkerModule, WebhooksWorkerModule],
 })
 export class WorkerModule {}

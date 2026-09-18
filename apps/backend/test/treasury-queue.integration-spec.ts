@@ -287,7 +287,7 @@ describe('a request becomes a balance change with nobody driving the worker', ()
   }, 20_000);
 });
 
-describe('two workers can run without doing each other\'s work', () => {
+describe("two workers can run without doing each other's work", () => {
   /**
    * `FOR UPDATE SKIP LOCKED` is what makes a second worker safe. These tests are
    * about the CLAIM, not about the ledger — the ledger already converges, so a
@@ -314,8 +314,11 @@ describe('two workers can run without doing each other\'s work', () => {
 
       await until(
         async () =>
-          (await prisma.treasuryCommand.findUnique({ where: { id: accepted.commandId } }))
-            ?.status === 'completed',
+          (
+            await prisma.treasuryCommand.findUnique({
+              where: { id: accepted.commandId },
+            })
+          )?.status === 'completed',
         10_000,
         'the contested command to complete',
       );
@@ -389,7 +392,12 @@ describe('two workers can run without doing each other\'s work', () => {
     // Another worker took it a moment ago and is presumably still working.
     await prisma.treasuryCommand.update({
       where: { id: accepted.commandId },
-      data: { status: 'processing', claimedBy: 'busy-worker', claimedAt: new Date(), attempts: 1 },
+      data: {
+        status: 'processing',
+        claimedBy: 'busy-worker',
+        claimedAt: new Date(),
+        attempts: 1,
+      },
     });
 
     listener = startListener();

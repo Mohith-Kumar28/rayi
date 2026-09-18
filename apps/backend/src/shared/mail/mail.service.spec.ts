@@ -1,8 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 
 import type { GlobalConfig } from '@/config/config.type';
+import type { PrismaService } from '@/database/prisma.service';
 
-import { MailSendError, MailService } from './mail.service';
+import {
+  MailSendError,
+  MailService,
+  MailSuppressedError,
+} from './mail.service';
 
 /**
  * The send path.
@@ -28,8 +33,13 @@ function makeService(options: {
   apiKey?: string;
   redirectAllTo?: string;
   replyTo?: string;
-  result?: { data: { id: string } | null; error: { name: string; message: string } | null };
-}): { service: MailService; calls: SendCall[] } {
+  result?: {
+    data: { id: string } | null;
+    error: { name: string; message: string } | null;
+  };
+  /** A suppression row that `findFirst` should return, or null for none. */
+  suppression?: { reason: string } | null;
+}): { service: MailService; calls: SendCall[]; suppressionQueries: unknown[] } {
   const calls: SendCall[] = [];
 
   const config = {
@@ -51,22 +61,37 @@ function makeService(options: {
     },
   } as unknown as ConfigService<GlobalConfig>;
 
-  const service = new MailService(config);
+  const suppressionQueries: unknown[] = [];
+  const prisma = {
+    emailSuppression: {
+      findFirst: (args: unknown) => {
+        suppressionQueries.push(args);
+        return Promise.resolve(options.suppression ?? null);
+      },
+    },
+  } as unknown as PrismaService;
+
+  const service = new MailService(config, prisma);
 
   if (options.apiKey) {
     // Replace the constructed client. The constructor decides WHETHER there is a
     // client (that logic is under test below); this replaces WHAT it talks to.
     (service as unknown as { client: unknown }).client = {
       emails: {
-        send: (payload: Record<string, unknown>, opts?: { idempotencyKey?: string }) => {
+        send: (
+          payload: Record<string, unknown>,
+          opts?: { idempotencyKey?: string },
+        ) => {
           calls.push({ payload, options: opts });
-          return Promise.resolve(options.result ?? { data: { id: 'email_123' }, error: null });
+          return Promise.resolve(
+            options.result ?? { data: { id: 'email_123' }, error: null },
+          );
         },
       },
     };
   }
 
-  return { service, calls };
+  return { service, calls, suppressionQueries };
 }
 
 describe('a process with no api key', () => {
@@ -75,14 +100,20 @@ describe('a process with no api key', () => {
     // notification and nobody finds out.
     const { service } = makeService({});
     await expect(
-      service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/1' }),
+      service.sendAuthMagicLinkMail({
+        email: 'a@b.test',
+        url: 'https://x.test/1',
+      }),
     ).rejects.toThrow(MailSendError);
   });
 
   it('says which process should have sent it', async () => {
     const { service } = makeService({});
     await expect(
-      service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/1' }),
+      service.sendAuthMagicLinkMail({
+        email: 'a@b.test',
+        url: 'https://x.test/1',
+      }),
     ).rejects.toThrow(/WORKER/);
   });
 });
@@ -90,7 +121,10 @@ describe('a process with no api key', () => {
 describe('a successful send', () => {
   it('renders HTML and a plain-text alternative', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendAuthMagicLinkMail({ email: 'jordan@acme.test', url: 'https://x.test/abc' });
+    await service.sendAuthMagicLinkMail({
+      email: 'jordan@acme.test',
+      url: 'https://x.test/abc',
+    });
 
     expect(calls).toHaveLength(1);
     const payload = calls[0]!.payload;
@@ -107,25 +141,42 @@ describe('a successful send', () => {
     // A recipient who cannot see where a button goes has no way to tell a real
     // sign-in link from a lookalike domain.
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://app.rayi.test/go' });
-    expect(String(calls[0]!.payload['html'])).toContain('https://app.rayi.test/go');
+    await service.sendAuthMagicLinkMail({
+      email: 'a@b.test',
+      url: 'https://app.rayi.test/go',
+    });
+    expect(String(calls[0]!.payload['html'])).toContain(
+      'https://app.rayi.test/go',
+    );
   });
 
   it('builds a from address with the display name', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendEmailVerificationMail({ email: 'a@b.test', url: 'https://x.test/1' });
+    await service.sendEmailVerificationMail({
+      email: 'a@b.test',
+      url: 'https://x.test/1',
+    });
     expect(calls[0]!.payload['from']).toBe('Rayi <no-reply@rayi.test>');
   });
 
   it('omits replyTo entirely when unset, rather than sending an empty one', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendEmailVerificationMail({ email: 'a@b.test', url: 'https://x.test/1' });
+    await service.sendEmailVerificationMail({
+      email: 'a@b.test',
+      url: 'https://x.test/1',
+    });
     expect('replyTo' in calls[0]!.payload).toBe(false);
   });
 
   it('includes replyTo when configured', async () => {
-    const { service, calls } = makeService({ apiKey: 're_test', replyTo: 'help@rayi.test' });
-    await service.sendEmailVerificationMail({ email: 'a@b.test', url: 'https://x.test/1' });
+    const { service, calls } = makeService({
+      apiKey: 're_test',
+      replyTo: 'help@rayi.test',
+    });
+    await service.sendEmailVerificationMail({
+      email: 'a@b.test',
+      url: 'https://x.test/1',
+    });
     expect(calls[0]!.payload['replyTo']).toBe('help@rayi.test');
   });
 
@@ -156,7 +207,10 @@ describe('a failed send', () => {
     // branch the job is marked complete and the email never existed.
     const { service } = makeService({
       apiKey: 're_test',
-      result: { data: null, error: { name: 'validation_error', message: 'Invalid `to` field' } },
+      result: {
+        data: null,
+        error: { name: 'validation_error', message: 'Invalid `to` field' },
+      },
     });
 
     await expect(
@@ -167,11 +221,17 @@ describe('a failed send', () => {
   it('names the template and the Resend error, so the failure is actionable', async () => {
     const { service } = makeService({
       apiKey: 're_test',
-      result: { data: null, error: { name: 'rate_limit_exceeded', message: 'Too many requests' } },
+      result: {
+        data: null,
+        error: { name: 'rate_limit_exceeded', message: 'Too many requests' },
+      },
     });
 
     await expect(
-      service.sendResetPasswordMail({ email: 'a@b.test', url: 'https://x.test/1' }),
+      service.sendResetPasswordMail({
+        email: 'a@b.test',
+        url: 'https://x.test/1',
+      }),
     ).rejects.toThrow(/reset-password.*rate_limit_exceeded.*Too many requests/);
   });
 
@@ -180,16 +240,23 @@ describe('a failed send', () => {
     // queue that says it succeeded is worse than a visible failure.
     const { service } = makeService({
       apiKey: 're_test',
-      result: { data: null, error: { name: 'application_error', message: 'upstream' } },
+      result: {
+        data: null,
+        error: { name: 'application_error', message: 'upstream' },
+      },
     });
     await expect(
-      service.sendEmailVerificationMail({ email: 'a@b.test', url: 'https://x.test/1' }),
+      service.sendEmailVerificationMail({
+        email: 'a@b.test',
+        url: 'https://x.test/1',
+      }),
     ).rejects.toBeInstanceOf(MailSendError);
   });
 });
 
 describe('idempotency', () => {
-  const key = (calls: SendCall[]) => calls[calls.length - 1]?.options?.idempotencyKey;
+  const key = (calls: SendCall[]) =>
+    calls[calls.length - 1]?.options?.idempotencyKey;
 
   it('is identical for the same email sent twice', async () => {
     // BullMQ is at-least-once: a worker killed mid-send, a stalled job, or a
@@ -206,25 +273,43 @@ describe('idempotency', () => {
 
   it('DIFFERS for a different link, so a genuine second email still sends', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/token-1' });
+    await service.sendAuthMagicLinkMail({
+      email: 'a@b.test',
+      url: 'https://x.test/token-1',
+    });
     const first = key(calls);
-    await service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/token-2' });
+    await service.sendAuthMagicLinkMail({
+      email: 'a@b.test',
+      url: 'https://x.test/token-2',
+    });
     expect(key(calls)).not.toBe(first);
   });
 
   it('differs for a different recipient', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/t' });
+    await service.sendAuthMagicLinkMail({
+      email: 'a@b.test',
+      url: 'https://x.test/t',
+    });
     const first = key(calls);
-    await service.sendAuthMagicLinkMail({ email: 'c@d.test', url: 'https://x.test/t' });
+    await service.sendAuthMagicLinkMail({
+      email: 'c@d.test',
+      url: 'https://x.test/t',
+    });
     expect(key(calls)).not.toBe(first);
   });
 
   it('differs for a different template with the same inputs', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/t' });
+    await service.sendAuthMagicLinkMail({
+      email: 'a@b.test',
+      url: 'https://x.test/t',
+    });
     const first = key(calls);
-    await service.sendEmailVerificationMail({ email: 'a@b.test', url: 'https://x.test/t' });
+    await service.sendEmailVerificationMail({
+      email: 'a@b.test',
+      url: 'https://x.test/t',
+    });
     expect(key(calls)).not.toBe(first);
   });
 
@@ -264,7 +349,10 @@ describe('the staging redirect', () => {
       redirectAllTo: 'staging@rayi.test',
     });
 
-    await service.sendAuthMagicLinkMail({ email: 'real@brand.test', url: 'https://x.test/1' });
+    await service.sendAuthMagicLinkMail({
+      email: 'real@brand.test',
+      url: 'https://x.test/1',
+    });
 
     expect(calls[0]!.payload['to']).toBe('staging@rayi.test');
   });
@@ -275,7 +363,10 @@ describe('the staging redirect', () => {
       redirectAllTo: 'staging@rayi.test',
     });
 
-    await service.sendAuthMagicLinkMail({ email: 'real@brand.test', url: 'https://x.test/1' });
+    await service.sendAuthMagicLinkMail({
+      email: 'real@brand.test',
+      url: 'https://x.test/1',
+    });
 
     expect(calls[0]!.payload['headers']).toEqual({
       'X-Rayi-Intended-Recipient': 'real@brand.test',
@@ -284,7 +375,10 @@ describe('the staging redirect', () => {
 
   it('adds no header at all when not redirecting', async () => {
     const { service, calls } = makeService({ apiKey: 're_test' });
-    await service.sendAuthMagicLinkMail({ email: 'real@brand.test', url: 'https://x.test/1' });
+    await service.sendAuthMagicLinkMail({
+      email: 'real@brand.test',
+      url: 'https://x.test/1',
+    });
     expect('headers' in calls[0]!.payload).toBe(false);
   });
 
@@ -295,7 +389,103 @@ describe('the staging redirect', () => {
       apiKey: 're_test',
       redirectAllTo: 'staging@rayi.test',
     });
-    await service.sendAuthMagicLinkMail({ email: 'real@brand.test', url: 'https://x.test/1' });
+    await service.sendAuthMagicLinkMail({
+      email: 'real@brand.test',
+      url: 'https://x.test/1',
+    });
     expect(String(calls[0]!.payload['html'])).toContain('real@brand.test');
+  });
+});
+
+describe('the suppression list', () => {
+  it('REFUSES to send to a hard-bounced address', async () => {
+    // Continuing to send to a dead mailbox damages the sending domain's
+    // reputation, which degrades delivery for every OTHER user. One dead address
+    // quietly makes everyone else's sign-in links less likely to arrive.
+    const { service, calls } = makeService({
+      apiKey: 're_test',
+      suppression: { reason: 'hard_bounce' },
+    });
+
+    await expect(
+      service.sendAuthMagicLinkMail({
+        email: 'dead@gone.test',
+        url: 'https://x.test/1',
+      }),
+    ).rejects.toThrow(MailSuppressedError);
+
+    // And nothing was sent.
+    expect(calls).toHaveLength(0);
+  });
+
+  it('throws a DIFFERENT error from a send failure, because the remedy differs', async () => {
+    // A send failure should be retried — BullMQ will, and should. A suppression
+    // is terminal: retrying achieves nothing but further reputation damage.
+    const { service } = makeService({
+      apiKey: 're_test',
+      suppression: { reason: 'complaint' },
+    });
+
+    const error = await service
+      .sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/1' })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(MailSuppressedError);
+    expect(error).not.toBeInstanceOf(MailSendError);
+    expect((error as MailSuppressedError).reason).toBe('complaint');
+  });
+
+  it('checks BEFORE rendering, so a suppressed send costs nothing', async () => {
+    const { service, suppressionQueries } = makeService({
+      apiKey: 're_test',
+      suppression: { reason: 'hard_bounce' },
+    });
+
+    await service
+      .sendAuthMagicLinkMail({ email: 'a@b.test', url: 'https://x.test/1' })
+      .catch(() => undefined);
+
+    expect(suppressionQueries).toHaveLength(1);
+  });
+
+  it('looks up the LOWER-CASED address', async () => {
+    // The unique index is on `lower(email)`. Querying the raw form would let
+    // `A@b.com` slip past a suppression recorded for `a@b.com`.
+    const { service, suppressionQueries } = makeService({ apiKey: 're_test' });
+
+    await service.sendAuthMagicLinkMail({
+      email: '  Jordan@ACME.test ',
+      url: 'https://x.test/1',
+    });
+
+    expect(suppressionQueries[0]).toMatchObject({
+      where: { email: 'jordan@acme.test', liftedAt: null },
+    });
+  });
+
+  it('ignores a suppression that has been lifted', async () => {
+    // A bounce can be a temporary mail-server misconfiguration, so suppression
+    // must be reversible — and the query is what makes the lift take effect.
+    const { service, calls, suppressionQueries } = makeService({
+      apiKey: 're_test',
+      suppression: null,
+    });
+
+    await service.sendAuthMagicLinkMail({
+      email: 'recovered@b.test',
+      url: 'https://x.test/1',
+    });
+
+    expect(suppressionQueries[0]).toMatchObject({ where: { liftedAt: null } });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('sends normally when the address is not suppressed', async () => {
+    const { service, calls } = makeService({ apiKey: 're_test' });
+    await service.sendAuthMagicLinkMail({
+      email: 'fine@b.test',
+      url: 'https://x.test/1',
+    });
+    expect(calls).toHaveLength(1);
   });
 });

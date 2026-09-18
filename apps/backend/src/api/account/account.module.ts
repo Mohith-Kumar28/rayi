@@ -1,7 +1,10 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 
+import { Queue } from '@/constants/job.constant';
 import { PrismaModule } from '@/database/prisma.module';
 
+import { AccountSecurityService } from './account-security.service';
 import { AccountController } from './account.controller';
 import { AccountService } from './account.service';
 
@@ -12,8 +15,8 @@ import { AccountService } from './account.service';
  * of least resistance.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, BullModule.registerQueue({ name: Queue.Email })],
   controllers: [AccountController],
-  providers: [AccountService],
+  providers: [AccountService, AccountSecurityService],
 })
 export class AccountModule {}

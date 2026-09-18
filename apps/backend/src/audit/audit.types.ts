@@ -17,7 +17,11 @@ export const AuditAction = {
   ProfileUpdated: 'account.profile_updated',
   EmailChangeRequested: 'account.email_change_requested',
   EmailChanged: 'account.email_changed',
+  EmailChangeCancelled: 'account.email_change_cancelled',
   TwoFactorEnabled: 'account.two_factor_enabled',
+  /// Counted for rate limiting, so the count and the history cannot disagree.
+  StepUpFailed: 'account.step_up_failed',
+  StepUpGranted: 'account.step_up_granted',
   TwoFactorDisabled: 'account.two_factor_disabled',
 
   // Money capability. The reason this log exists at all.
@@ -29,6 +33,11 @@ export const AuditAction = {
   BudgetAllocationRequested: 'treasury.allocation_requested',
   BudgetAllocationPosted: 'treasury.allocation_posted',
   BudgetAllocationFailed: 'treasury.allocation_failed',
+
+  // Email deliverability. A suppressed address is a user who can no longer sign
+  // in, so "why did mail stop" has to be answerable when they contact support.
+  EmailSuppressed: 'email.suppressed',
+  EmailSuppressionLifted: 'email.suppression_lifted',
 
   // Membership
   MemberInvited: 'member.invited',

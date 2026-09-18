@@ -1,20 +1,32 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import {
   type CanActivate,
   type ExecutionContext,
   Injectable,
   Module,
 } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import {
+  FastifyAdapter,
+  type NestFastifyApplication,
+} from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
 import { AccountModule } from '../src/api/account/account.module';
 import { AuditModule } from '../src/audit/audit.module';
+import { StepUpModule } from '../src/auth/step-up/step-up.module';
+import {
+  decodeBase32,
+  DEFAULT_PERIOD,
+  generateAt,
+} from '../src/auth/step-up/totp';
 import { AuthorizationModule } from '../src/authorization/authorization.module';
-import { PrismaService as PrismaServiceClass } from '../src/database/prisma.service';
+import { Queue } from '../src/constants/job.constant';
 import type { PrismaService } from '../src/database/prisma.service';
+import { PrismaService as PrismaServiceClass } from '../src/database/prisma.service';
 import { PermissionGuard } from '../src/guards/permission.guard';
 
 /**
@@ -31,7 +43,8 @@ import { PermissionGuard } from '../src/guards/permission.guard';
  */
 
 const DATABASE_URL =
-  process.env.LEDGER_TEST_DATABASE_URL ?? 'postgresql://rayi:rayi@localhost:55432/rayi';
+  process.env.LEDGER_TEST_DATABASE_URL ??
+  'postgresql://rayi:rayi@localhost:55432/rayi';
 
 const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
 const prismaService = prisma as unknown as PrismaService;
@@ -49,13 +62,27 @@ class StubAuthGuard implements CanActivate {
     }>();
     const userId = request.headers['x-test-user'];
     const token = request.headers['x-test-token'];
-    request.session = userId ? { user: { id: userId }, session: { token } } : undefined;
+    request.session = userId
+      ? { user: { id: userId }, session: { token } }
+      : undefined;
     return true;
   }
 }
 
+/** Records what would have been emailed, so the tests can assert on it. */
+const enqueued: Array<{ name: string; data: Record<string, unknown> }> = [];
+
 @Module({
-  imports: [AccountModule, AuditModule, AuthorizationModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [() => ({ app: { url: 'https://app.rayi.test' } })],
+    }),
+    AccountModule,
+    AuditModule,
+    AuthorizationModule,
+    StepUpModule,
+  ],
   providers: [
     { provide: APP_GUARD, useClass: StubAuthGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
@@ -84,7 +111,11 @@ async function makeUser(label: string): Promise<string> {
   return user.id;
 }
 
-async function makeSession(userId: string, token: string, ip = '203.0.113.5'): Promise<string> {
+async function makeSession(
+  userId: string,
+  token: string,
+  ip = '203.0.113.5',
+): Promise<string> {
   const session = await prisma.session.create({
     data: {
       userId,
@@ -105,15 +136,32 @@ beforeAll(async () => {
 
   aliceCurrentToken = `tok-${run}-alice-current`;
   await makeSession(alice, aliceCurrentToken);
-  aliceOtherSessionId = await makeSession(alice, `tok-${run}-alice-laptop`, '198.51.100.9');
+  aliceOtherSessionId = await makeSession(
+    alice,
+    `tok-${run}-alice-laptop`,
+    '198.51.100.9',
+  );
   bobSessionId = await makeSession(bob, `tok-${run}-bob`);
 
-  const moduleRef = await Test.createTestingModule({ imports: [TestAccountApi] })
+  const moduleRef = await Test.createTestingModule({
+    imports: [TestAccountApi],
+  })
     .overrideProvider(PrismaServiceClass)
     .useValue(prismaService)
+    // Redis is not part of what this test is about. The queue is replaced with a
+    // recorder so the assertions can be about WHAT would be sent.
+    .overrideProvider(getQueueToken(Queue.Email))
+    .useValue({
+      add: (name: string, data: Record<string, unknown>) => {
+        enqueued.push({ name, data });
+        return Promise.resolve();
+      },
+    })
     .compile();
 
-  app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+  app = moduleRef.createNestApplication<NestFastifyApplication>(
+    new FastifyAdapter(),
+  );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 }, 60_000);
@@ -135,11 +183,15 @@ function call(
       // Only when there IS a body. Fastify rejects a JSON content-type with an
       // empty body as 400 (FST_ERR_CTP_EMPTY_JSON_BODY), which is correct
       // behaviour and exactly what a real client does not do.
-      ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(options.body !== undefined
+        ? { 'content-type': 'application/json' }
+        : {}),
       ...(options.user ? { 'x-test-user': options.user } : {}),
       ...(options.token ? { 'x-test-token': options.token } : {}),
     },
-    ...(options.body !== undefined ? { payload: options.body as Record<string, unknown> } : {}),
+    ...(options.body !== undefined
+      ? { payload: options.body as Record<string, unknown> }
+      : {}),
   });
 }
 
@@ -152,19 +204,28 @@ describe('listing your own sessions', () => {
     expect(response.statusCode).toBe(200);
 
     const body = JSON.parse(response.payload) as {
-      sessions: Array<{ sessionId: string; current: boolean; ipAddress: string | null }>;
+      sessions: Array<{
+        sessionId: string;
+        current: boolean;
+        ipAddress: string | null;
+      }>;
     };
 
     expect(body.sessions).toHaveLength(2);
     expect(body.sessions.filter((session) => session.current)).toHaveLength(1);
-    expect(body.sessions.map((session) => session.sessionId)).not.toContain(bobSessionId);
+    expect(body.sessions.map((session) => session.sessionId)).not.toContain(
+      bobSessionId,
+    );
   }, 20_000);
 
   it('NEVER returns a session token', async () => {
     // A list endpoint that returned tokens would turn "show me my devices" into
     // "hand me a credential for each of them", and an XSS on that page would
     // harvest every one.
-    const response = await call('GET', '/v1/me/sessions', { user: alice, token: aliceCurrentToken });
+    const response = await call('GET', '/v1/me/sessions', {
+      user: alice,
+      token: aliceCurrentToken,
+    });
     expect(response.payload).not.toContain(aliceCurrentToken);
     expect(response.payload).not.toContain('token');
   }, 20_000);
@@ -186,7 +247,9 @@ describe('revoking a session', () => {
     expect(response.statusCode).toBe(404);
 
     // And Bob is still signed in.
-    const still = await prisma.session.findUnique({ where: { id: bobSessionId } });
+    const still = await prisma.session.findUnique({
+      where: { id: bobSessionId },
+    });
     expect(still).not.toBeNull();
   }, 20_000);
 
@@ -199,15 +262,23 @@ describe('revoking a session', () => {
   }, 20_000);
 
   it('revokes your own, and records it in the audit log', async () => {
-    const response = await call('DELETE', `/v1/me/sessions/${aliceOtherSessionId}`, {
-      user: alice,
-      token: aliceCurrentToken,
-    });
+    const response = await call(
+      'DELETE',
+      `/v1/me/sessions/${aliceOtherSessionId}`,
+      {
+        user: alice,
+        token: aliceCurrentToken,
+      },
+    );
     expect(response.statusCode).toBe(204);
 
-    expect(await prisma.session.findUnique({ where: { id: aliceOtherSessionId } })).toBeNull();
+    expect(
+      await prisma.session.findUnique({ where: { id: aliceOtherSessionId } }),
+    ).toBeNull();
 
-    const events = await prisma.$queryRawUnsafe<Array<{ action: string; subject_id: string }>>(
+    const events = await prisma.$queryRawUnsafe<
+      Array<{ action: string; subject_id: string }>
+    >(
       `SELECT action, subject_id FROM audit.event
         WHERE actor_user_id = $1 ORDER BY seq DESC LIMIT 1`,
       alice,
@@ -232,13 +303,17 @@ describe('signing out everywhere else', () => {
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.payload)).toEqual({ revoked: 2 });
 
-    const remaining = await prisma.session.findMany({ where: { userId: alice } });
+    const remaining = await prisma.session.findMany({
+      where: { userId: alice },
+    });
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.token).toBe(aliceCurrentToken);
   }, 20_000);
 
   it('does not touch another user’s sessions', async () => {
-    const bobSessions = await prisma.session.findMany({ where: { userId: bob } });
+    const bobSessions = await prisma.session.findMany({
+      where: { userId: bob },
+    });
     expect(bobSessions.length).toBeGreaterThan(0);
   }, 20_000);
 
@@ -246,7 +321,9 @@ describe('signing out everywhere else', () => {
     // Without knowing which session is current, "revoke the others" cannot be
     // answered safely, and guessing would sign the user out of the device they
     // are using.
-    const response = await call('POST', '/v1/me/sessions/revoke-others', { user: alice });
+    const response = await call('POST', '/v1/me/sessions/revoke-others', {
+      user: alice,
+    });
     expect(response.statusCode).toBe(401);
   }, 20_000);
 });
@@ -264,7 +341,9 @@ describe('updating your profile', () => {
     expect(user.firstName).toBe('Alice');
     expect(user.bio).toBe('Skincare brand lead');
 
-    const events = await prisma.$queryRawUnsafe<Array<{ action: string; data: unknown }>>(
+    const events = await prisma.$queryRawUnsafe<
+      Array<{ action: string; data: unknown }>
+    >(
       `SELECT action, data FROM audit.event WHERE actor_user_id = $1 ORDER BY seq DESC LIMIT 1`,
       alice,
     );
@@ -282,7 +361,12 @@ describe('updating your profile', () => {
     const response = await call('PATCH', '/v1/me/profile', {
       user: alice,
       token: aliceCurrentToken,
-      body: { firstName: 'Alice', role: 'Admin', isEmailVerified: true, email: 'evil@test.local' },
+      body: {
+        firstName: 'Alice',
+        role: 'Admin',
+        isEmailVerified: true,
+        email: 'evil@test.local',
+      },
     });
     expect(response.statusCode).toBe(200);
 
@@ -318,12 +402,131 @@ describe('your own activity', () => {
     });
     expect(response.statusCode).toBe(200);
 
-    const body = JSON.parse(response.payload) as { events: Array<{ action: string }> };
+    const body = JSON.parse(response.payload) as {
+      events: Array<{ action: string }>;
+    };
     expect(body.events.length).toBeGreaterThan(0);
 
     const bobResponse = await call('GET', '/v1/me/activity', { user: bob });
     const bobBody = JSON.parse(bobResponse.payload) as { events: unknown[] };
     // Bob has caused no events, so he sees none — rather than seeing Alice's.
     expect(bobBody.events).toEqual([]);
+  }, 20_000);
+});
+
+describe('the email-change route over HTTP', () => {
+  const SECRET = 'JBSWY3DPEHPK3PXP';
+
+  async function enrol(userId: string): Promise<void> {
+    await prisma.twoFactor.create({ data: { userId, secret: SECRET } });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: true },
+    });
+  }
+
+  function code(): string {
+    return generateAt(
+      decodeBase32(SECRET)!,
+      Math.floor(Date.now() / 1000 / DEFAULT_PERIOD),
+    );
+  }
+
+  it('sends the WARNING to the old address before the confirmation to the new one', async () => {
+    // Order matters. If only one of the two can be delivered, the one that lets
+    // the real owner stop an attack is worth more than the one that completes it.
+    const user = await makeUser('changer');
+    await enrol(user);
+    enqueued.length = 0;
+
+    const response = await call('POST', '/v1/me/email', {
+      user,
+      token: 'tok',
+      body: { newEmail: `${run}-moved@test.local`, code: code() },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(enqueued.map((job) => job.name)).toEqual([
+      'email-change-notice',
+      'email-change-confirm',
+    ]);
+
+    const notice = enqueued[0]!.data;
+    // To the OLD address, naming the new one, with a link that stops it.
+    expect(notice['email']).toBe(`${run}-changer@test.local`);
+    expect(notice['newEmail']).toBe(`${run}-moved@test.local`);
+    expect(String(notice['cancelUrl'])).toContain(
+      '/auth/email-change/cancel?token=',
+    );
+  }, 30_000);
+
+  it('refuses without a valid code, and queues nothing', async () => {
+    const user = await makeUser('nocode');
+    await enrol(user);
+    enqueued.length = 0;
+
+    const response = await call('POST', '/v1/me/email', {
+      user,
+      token: 'tok',
+      body: { newEmail: `${run}-nope@test.local`, code: '000000' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(enqueued).toHaveLength(0);
+  }, 30_000);
+
+  it('refuses an unauthenticated caller before anything else', async () => {
+    const response = await call('POST', '/v1/me/email', {
+      body: { newEmail: 'x@test.local', code: '123456' },
+    });
+    expect(response.statusCode).toBe(401);
+  }, 20_000);
+
+  it('rejects a malformed address at the contract boundary', async () => {
+    const user = await makeUser('badaddr');
+    await enrol(user);
+    const response = await call('POST', '/v1/me/email', {
+      user,
+      token: 'tok',
+      body: { newEmail: 'not-an-address', code: code() },
+    });
+    expect(response.statusCode).toBe(400);
+  }, 20_000);
+});
+
+describe('removing the second factor over HTTP', () => {
+  const SECRET = 'JBSWY3DPEHPK3PXP';
+
+  it('refuses without a code from the factor being removed', async () => {
+    const user = await makeUser('keepfactor');
+    await prisma.twoFactor.create({ data: { userId: user, secret: SECRET } });
+
+    const response = await call('POST', '/v1/me/two-factor/disable', {
+      user,
+      token: 'tok',
+      body: { code: '000000' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(await prisma.twoFactor.count({ where: { userId: user } })).toBe(1);
+  }, 20_000);
+
+  it('removes it with a correct code', async () => {
+    const user = await makeUser('dropfactor');
+    await prisma.twoFactor.create({ data: { userId: user, secret: SECRET } });
+
+    const response = await call('POST', '/v1/me/two-factor/disable', {
+      user,
+      token: 'tok',
+      body: {
+        code: generateAt(
+          decodeBase32(SECRET)!,
+          Math.floor(Date.now() / 1000 / DEFAULT_PERIOD),
+        ),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await prisma.twoFactor.count({ where: { userId: user } })).toBe(0);
   }, 20_000);
 });

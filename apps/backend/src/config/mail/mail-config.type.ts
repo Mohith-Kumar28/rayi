@@ -16,4 +16,13 @@ export type MailConfig = {
    * brand's mailbox is not a mistake anyone gets to make twice.
    */
   redirectAllTo?: string;
+  /**
+   * The Svix signing secret for Resend's webhooks (`whsec_...`).
+   *
+   * Held by whichever process serves the webhook route — the api today, its own
+   * `webhooks` process once that exists. It is a VERIFICATION secret, not a
+   * sending credential: it cannot send mail, so it does not carry the same
+   * worker-only restriction as RESEND_API_KEY.
+   */
+  webhookSecret?: string;
 };

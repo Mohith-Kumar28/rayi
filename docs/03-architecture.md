@@ -12,7 +12,7 @@ rayi/
 │   │   ├── src/
 │   │   │   ├── main.ts        entrypoint (role selected by IS_WORKER)
 │   │   │   ├── app.module.ts  .common() / .api() / .worker() / .main()
-│   │   │   ├── api/           feature modules: health, user, file, funding
+│   │   │   ├── api/           health, user, file, funding, account, webhooks
 │   │   │   ├── architecture/  boundary rules asserted as tests
 │   │   │   ├── audit/         hash-chained append-only log (global module)
 │   │   │   ├── auth/          Better Auth integration, AuthGuard, route allowlist
@@ -172,6 +172,36 @@ The consequence is a rule the guard cannot enforce: **a `self` handler must scop
 session's user id in the WHERE clause.** So it is asserted by test instead — `account-http` checks
 that another user's session id returns 404 and is not revoked. A session id is not a secret; it
 appears in its owner's own list.
+
+## Webhooks: verify, store, acknowledge — and nothing else
+
+```
+provider → POST /webhooks/<source>        [api]
+             verify signature (raw bytes)
+             INSERT webhook_event          ← the delivery, raw
+             200
+                                          [worker, 30s later]
+             read pending rows → interpret → act
+```
+
+A webhook handler that also does the work has the **provider's retry policy wired to our processing
+time**. A slow handler becomes a timeout, a timeout becomes a retry, and a bug becomes a lost
+delivery once the provider gives up. For Stripe that is a three-day fuse on a silent money bug.
+
+Enforced structurally, the same way treasury is: `WebhooksModule` (controller) is in the api graph,
+`WebhooksWorkerModule` (interpreter + poller) only in the worker's, and dependency-cruiser fails CI
+if the api reaches the interpreter — with a test that breaks the rule to prove it fires.
+
+**The raw body is the evidence.** The signature covers the exact bytes sent. `request.body` has been
+parsed, and re-serialising it changes whitespace, number formatting, duplicate keys and key order, so
+the signature never matches — a failure that fails closed and looks like an attack. `rawBody: true`
+is set on the application, and the stored payload is `TEXT` rather than `jsonb` so the row still
+verifies years later. `webhook_event`'s payload, headers, provider id and receipt time are immutable
+after insert; the processing columns are not, because a worker has to mark a row done.
+
+`(source, externalId)` is unique, so a provider retrying a delivery it already made produces no
+second row — and the retry is answered **200**, because from the provider's side it succeeded.
+Anything else teaches it to keep retrying work that is already done.
 
 ## The audit log
 

@@ -51,6 +51,10 @@ Project skills in `.claude/skills/` load automatically when relevant:
 
 4. **No external call inside a database transaction.** No Stripe, no HTTP, no notification.
 
+   A **webhook handler** verifies the signature over the RAW bytes, stores the delivery, and returns
+   200. It never interprets — the worker does, later. A handler that acts has the provider's retry
+   policy wired to our processing time.
+
    Email goes through **Resend**, from the worker only — `RESEND_API_KEY` on the api fails at boot,
    same as the Stripe secret key. `emails.send()` **resolves** on failure (`{ data, error }`), so
    never treat a resolved promise as a sent email. Every send carries a deterministic idempotency
@@ -68,6 +72,12 @@ Project skills in `.claude/skills/` load automatically when relevant:
 
    Money capability is **never a role**. It is a `MoneyAuthority` row, checked separately from
    `can()`, and the per-transaction limit is checked where the amount is visible.
+
+   **Step-up** (`StepUpService`) proves who is at the keyboard right now. A grant is bound to a
+   PURPOSE and a RESOURCE, single-use, and consumed with one conditional `updateMany` — never
+   check-then-spend, which leaves the window that is the whole vulnerability. Anything with
+   parameters computes its own `resourceHash` inside the handler, from what the server is about to
+   do, never from what a client claims it is confirming.
 
 6. **An account is derived, never named.** A caller says which campaign it is acting on;
    `ledger.account_for_campaign` decides which account that is and reads the owning org from the

@@ -8,16 +8,16 @@ until step 16.
 Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
 Better Auth account endpoints that are currently blocked rather than replaced.
 
-Current test count: **378 passing**.
+Current test count: **549 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
 | `@rayi/domain` — Money, pure ledger logic | 36 | no |
-| `@rayi/contracts` — manifest invariants, OpenAPI shape | 26 | no |
+| `@rayi/contracts` — manifest invariants, OpenAPI shape | 40 | no |
 | `@rayi/api-client` — generated client + error envelope | 10 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
-| `@rayi/backend` unit — config, guards, auth allowlist, **mail**, architecture boundaries | 162 | no |
-| `@rayi/backend` integration — ledger, integrity, **audit**, authorization, treasury, **account**, HTTP, queue | **114** | **yes** |
+| `@rayi/backend` unit — config, guards, auth allowlist, mail, webhook signatures, **TOTP (RFC 6238 vectors)**, architecture boundaries | 235 | no |
+| `@rayi/backend` integration — ledger, integrity, audit, authorization, treasury, account, **step-up**, **members**, webhooks, HTTP, queue | **198** | **yes** |
 
 Two gates run outside the test suites, both of which fail CI on drift:
 `pnpm verify:openapi` (the spec matches the manifest) and `pnpm verify:auth-surface`
@@ -211,7 +211,7 @@ handlers from the generated client.
 Still open: review queue, `<StatusPill>`, `<Countdown>`, org switcher. **Nobody has visually reviewed
 the UI** — see technical debt.
 
-## 🟡 6. Identity and authorization
+## ✅ 6. Identity and authorization
 
 - [x] `PermissionService` over a `role_permission` table, 48-row matrix
 - [x] Money capability as a `MoneyAuthority` **row**, never a role string
@@ -228,10 +228,81 @@ the UI** — see technical debt.
 - [x] **Profile update reimplemented** with an explicit field allowlist
 - [x] `access: { kind: 'self' }` added to the manifest, so an account route declares its access
       without inventing a tenant scope it does not have
-- [ ] Reimplement invite / role-change / member-removal as Nest controllers with audit + step-up
-- [ ] Email change with step-up and notification to the OLD address
-- [ ] Two-factor enrolment and removal behind step-up
+- [x] **Step-up authentication** — RFC 6238 TOTP, verified against the spec's own Appendix B
+      vectors, plus short-lived grants bound to a purpose AND a resource, single-use and consumed
+      atomically
+- [x] **Email change** with step-up, a confirmation at the NEW address and a cancel link to the OLD
+      one
+- [x] **Two-factor removal** behind a code from the factor being removed
+- [x] **Invite / role-change / member-removal** as Nest controllers with a role ceiling, step-up,
+      audit rows and session + money-authority revocation on downgrade
 - [ ] Generate Better Auth's `ac` object from `role_permission` at boot with an equality assertion
+- [ ] Two-factor **enrolment** (removal is built; enrolment still goes through Better Auth's
+      blocked endpoint, so a user with no factor cannot add one yet)
+
+### Step-up: what makes it more than a second prompt
+
+A session cannot prove who is at the keyboard — it was established once, possibly days ago, possibly
+on a device that is no longer in the user's hands. So sensitive actions take a fresh factor, and the
+grant it mints has three properties that each exist because their absence has been a real
+vulnerability:
+
+| Property | Without it |
+| --- | --- |
+| Bound to a **purpose** | A grant minted to change an email removes a second factor |
+| Bound to a **resource** | Confirming "$10 to campaign A" authorises "$10,000 to campaign B" — literally the bulk-approve hole the money review found |
+| **Single use, consumed atomically** | Two concurrent requests both spend the same confirmation |
+
+The consume is one conditional `updateMany` carrying every condition. Check-then-spend would leave a
+window between the two, and that window is the whole vulnerability — there is a test that races three
+consumes and asserts exactly one wins.
+
+Rate limited at five failures per fifteen minutes. Six digits with a one-step drift window is three
+valid values in a million at any moment, so unlimited guessing finds one in minutes at HTTP speeds.
+That limit is not hardening; it is the difference between a second factor and a delay.
+
+**TOTP is implemented rather than depended on**, because Better Auth's `verifyTOTP` is a sign-in
+endpoint — it establishes a session, which is the wrong effect for "confirm you are still you" and
+would make a step-up indistinguishable from a fresh login in the audit trail. Writing it is
+defensible because RFC 6238 publishes **test vectors**: the implementation is checked against
+Appendix B for SHA-1, SHA-256 and SHA-512, so correctness is verified against the specification
+rather than against a reading of it.
+
+### Email change is two-sided, and both sides matter
+
+The **step-up** proves the person asking holds the factor. The **confirmation at the new address**
+proves they can receive mail there — without it a typo locks someone out permanently, and the failure
+is invisible until they next try to sign in.
+
+The **old address is notified first**, before the confirmation is sent. If only one of the two can be
+delivered, the one that lets the real owner stop an attack is worth more than the one that completes
+it. That notification carries a cancel link needing no sign-in, because the person receiving it may
+already be locked out — requiring authentication would make the escape hatch useless exactly when it
+matters.
+
+Tokens are stored as SHA-256 hashes only. A database read must not hand over a working
+account-takeover link.
+
+### Membership: the escalation that is now unreachable
+
+Better Auth's docs say plainly that *"there's no built-in restriction preventing an admin from
+inviting someone as owner"*. That makes self-promotion a two-step move for any admin with a second
+mailbox — and because its endpoints bypass the Nest guard chain, nothing in the control design ever
+saw it.
+
+- **Nobody may grant a role above their own.** Comma-separated roles are split and read by their
+  HIGHEST value, because `role === 'owner'` is false for `'member,owner'` while
+  `role.includes('owner')` is true for `'not-owner'`. Both are tested.
+- **Self-promotion is refused outright**, even for an owner, so there is always a second person in
+  the record.
+- **A downgrade kills the sessions and the money authority.** A role taken away that leaves a live
+  session is a role still held, for as long as that session lasts.
+- **An invitation can only ever produce a ROLE.** Money capability is a separate row nothing in the
+  membership path can create — which deletes the escalation class rather than guarding its uses.
+- The members list **flags who holds money authority**, because capability invisible in that list is
+  capability nobody audits.
+- An organization cannot be left with **no owner** — an unrecoverable state reachable by an ordinary
+  mistake.
 
 ### The mount was the hole, and it is closed
 
@@ -400,7 +471,70 @@ Two accounts, prod SCP denying `rds:DeleteDBInstance` / `kms:ScheduleKeyDeletion
 `cloudtrail:StopLogging` / `backup:DeleteBackupVault`. GitHub OIDC, Terraform owning task definitions.
 One alarm deliberately tripped to prove the SNS-to-phone path works.
 
-## ⬜ 9. Webhook ingestion
+## 🟡 9. Webhook ingestion
+
+The **pattern** is built and proven against Resend. Stripe reuses it unchanged,
+which is the point of having done the lower-stakes provider first.
+
+- [x] `webhook_event` — every delivery stored RAW, idempotent on `(source, externalId)`, with the
+      payload, headers and provider id **immutable** after receipt
+- [x] Svix signature verification with replay protection and secret rotation (29 tests)
+- [x] Verify → store → 200, and nothing else in the request
+- [x] Interpretation split into the **worker**, enforced by dependency-cruiser with a test that
+      breaks the rule and asserts it fires
+- [x] Resend bounce and complaint handling, with an email suppression list
+- [ ] Stripe platform + Connect endpoints, two signing secrets, `Stripe-Account` routing
+- [ ] Eight adversarial orderings converging to the same golden ledger fingerprint
+- [ ] WAF managed rules in Count mode for two weeks with a Stripe-IP allow rule ahead of them
+
+### Why the handler is three lines of work
+
+A webhook endpoint that also does the work has the **provider's retry policy wired to our processing
+time**. A slow handler becomes a timeout, a timeout becomes a retry, and a bug becomes a lost
+delivery once the provider gives up. For Stripe that is a three-day fuse on a silent money bug.
+
+So: verify the signature, insert the raw row, return 200. `ResendWebhookPoller` in the worker reads
+it back 30 seconds later, where being slow costs nothing.
+
+### The raw body is the evidence
+
+The signature covers the exact bytes the provider sent. `request.body` has been parsed, and
+re-serialising it changes whitespace, number formatting, duplicate keys and key order — so the
+signature never matches. That failure **fails closed and looks like an attack**: every delivery
+rejected as unauthenticated, logs full of signature mismatches, nothing pointing at the parser.
+
+Four test cases cover exactly that, and the stored payload is `TEXT` rather than `jsonb` for the same
+reason — the row has to still verify years later.
+
+A first attempt registered a custom Fastify content-type parser and collided with the one Nest
+registers during `init()`. Nest's own `rawBody: true` is the supported answer, and the test sets it
+the same way `main.ts` does, so the option is under test rather than being test scaffolding.
+
+### Suppression is a control pointed at our own users
+
+A hard bounce means the mailbox does not exist. Continuing to send damages the sending domain's
+reputation, which degrades delivery for **every other user** — one dead address quietly makes
+everyone else's sign-in links less likely to arrive. It also makes a real failure visible: without
+it, a creator whose address is dead looks exactly like one who has not read their email, and the
+first symptom is an unexplained missing payout.
+
+Getting it wrong in the aggressive direction is worse than getting it wrong permissively, so:
+
+- **only a `Permanent` bounce suppresses.** A transient one is a full mailbox or a greylist, and
+  suppressing on those locks a creator out over a mail server that was busy for an hour
+- an **unknown** bounce type does not suppress — one more email to a dead address costs
+  deliverability; a wrongly suppressed address costs a user their account, and they cannot tell us,
+  because the way they tell us is email
+- the **first** suppression is kept rather than overwritten, because it is the one that explains why
+  mail stopped
+- every suppression writes an audit row, so support can answer "why did mail stop"
+- it is **reversible** (`liftedAt`), because a bounce can be a temporary misconfiguration
+
+`MailService` checks the list before rendering anything, and throws `MailSuppressedError` — distinct
+from `MailSendError` because the remedies differ: a send failure should be retried and a suppression
+never should.
+
+
 
 Two endpoints, two signing secrets, `Stripe-Account` routing. Store raw, return 200, process in the
 worker. WAF managed rules in **Count mode for two weeks** first — a blocked webhook is a silent money
@@ -462,9 +596,5 @@ while Stripe has moved on.
 - [x] ~~`TreasuryCommandListener` needs `FOR UPDATE SKIP LOCKED` before a second worker runs~~ — done:
       claims are atomic, leases expire after 5 minutes so a dead worker's command is reclaimed, and
       `attempts` is capped at 5 so a poison command stops being retried instead of becoming a hot loop
-- [ ] Users cannot change their email or manage sessions: those Better Auth endpoints are blocked and
-      their Nest replacements are not built yet
 - [ ] The seed script creates an admin with a password, which no longer signs anyone in
-- [ ] No Resend webhook handling yet: a hard bounce or a spam complaint is invisible, so a creator
-      whose address is dead looks identical to one who has not read their email
 - [ ] The console has no UI for the account routes (`/v1/me/*`) — the API exists, nothing calls it

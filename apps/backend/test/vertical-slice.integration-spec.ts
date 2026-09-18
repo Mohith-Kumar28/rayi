@@ -479,7 +479,9 @@ describe('a client-supplied figure is an assertion, never an instruction', () =>
 
     await processor.process(accepted.commandId);
 
-    const failed = await prisma.treasuryCommand.findUnique({ where: { id: accepted.commandId } });
+    const failed = await prisma.treasuryCommand.findUnique({
+      where: { id: accepted.commandId },
+    });
     expect(failed?.status).toBe('failed');
     expect(failed?.failureReason).toMatch(/stale_balance/);
 
@@ -500,7 +502,9 @@ describe('a client-supplied figure is an assertion, never an instruction', () =>
 
     await processor.process(accepted.commandId);
 
-    const done = await prisma.treasuryCommand.findUnique({ where: { id: accepted.commandId } });
+    const done = await prisma.treasuryCommand.findUnique({
+      where: { id: accepted.commandId },
+    });
     expect(done?.status).toBe('completed');
     expect(await campaignBalance()).toBe(before + 1_000n);
   }, 30_000);

@@ -1,7 +1,13 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { AuditService } from '@/audit/audit.service';
 import { AuditAction } from '@/audit/audit.types';
+import type { RequestContext } from '@/common/types/request-context.type';
 import { PrismaService } from '@/database/prisma.service';
 
 /**
@@ -28,12 +34,6 @@ export interface SessionSummary {
   readonly current: boolean;
 }
 
-export interface RequestContext {
-  readonly requestId?: string | undefined;
-  readonly ipAddress?: string | undefined;
-  readonly userAgent?: string | undefined;
-}
-
 @Injectable()
 export class AccountService {
   private readonly logger = new Logger(AccountService.name);
@@ -54,7 +54,10 @@ export class AccountService {
    * turn "show me my devices" into "hand me a credential for each of them", and
    * an XSS on the page would harvest every one.
    */
-  async listSessions(userId: string, currentToken?: string): Promise<SessionSummary[]> {
+  async listSessions(
+    userId: string,
+    currentToken?: string,
+  ): Promise<SessionSummary[]> {
     const sessions = await this.prisma.session.findMany({
       where: { userId, expiresAt: { gt: new Date() } },
       select: {
@@ -158,7 +161,12 @@ export class AccountService {
    */
   async updateProfile(
     userId: string,
-    changes: { firstName?: string; lastName?: string; bio?: string; image?: string },
+    changes: {
+      firstName?: string;
+      lastName?: string;
+      bio?: string;
+      image?: string;
+    },
     context: RequestContext,
   ): Promise<void> {
     const data: Record<string, string> = {};

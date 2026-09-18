@@ -18,9 +18,14 @@ import { isWorkerProcess } from './is-worker-process';
  */
 
 describe('only the literal string true means worker', () => {
-  it.each([['true'], ['TRUE'], ['True'], ['  true  ']])('accepts %p', (value) => {
-    expect(isWorkerProcess({ IS_WORKER: value } as NodeJS.ProcessEnv)).toBe(true);
-  });
+  it.each([['true'], ['TRUE'], ['True'], ['  true  ']])(
+    'accepts %p',
+    (value) => {
+      expect(isWorkerProcess({ IS_WORKER: value } as NodeJS.ProcessEnv)).toBe(
+        true,
+      );
+    },
+  );
 });
 
 describe('everything else fails CLOSED', () => {
@@ -33,7 +38,9 @@ describe('everything else fails CLOSED', () => {
     ['a typo', 'ture'],
     ['whitespace only', '   '],
   ])('refuses %s', (_label, value) => {
-    expect(isWorkerProcess({ IS_WORKER: value } as NodeJS.ProcessEnv)).toBe(false);
+    expect(isWorkerProcess({ IS_WORKER: value } as NodeJS.ProcessEnv)).toBe(
+      false,
+    );
   });
 
   it('refuses when the variable is absent entirely', () => {
@@ -44,7 +51,9 @@ describe('everything else fails CLOSED', () => {
     // Stated as its own assertion because the direction is the whole point. An
     // unparseable value must mean "not the worker", which refuses the
     // credential, rather than "worker", which grants it.
-    const ambiguous = isWorkerProcess({ IS_WORKER: 'maybe' } as NodeJS.ProcessEnv);
+    const ambiguous = isWorkerProcess({
+      IS_WORKER: 'maybe',
+    } as NodeJS.ProcessEnv);
     expect(ambiguous).toBe(false);
   });
 });

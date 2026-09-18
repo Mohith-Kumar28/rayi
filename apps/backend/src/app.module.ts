@@ -24,8 +24,9 @@ import { LoggerModule } from 'nestjs-pino';
 import { FastifyAdapter } from '@bull-board/fastify';
 import { GracefulShutdownModule } from 'nestjs-graceful-shutdown';
 import { ApiModule } from './api/api.module';
-import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
+import { AuthModule } from './auth/auth.module';
+import { StepUpModule } from './auth/step-up/step-up.module';
 import { AuthorizationModule } from './authorization/authorization.module';
 import { default as awsConfig } from './config/aws/aws.config';
 import {
@@ -84,6 +85,9 @@ export class AppModule {
         // Global, and in `common()` so the worker has it too — a money command
         // that posts without an audit row is the case this log exists for.
         AuditModule,
+        // In `common()` so the worker has it too: a payout sweep re-checks the
+        // authority it was given, and that check must be able to see grants.
+        StepUpModule,
         BullModule.forRootAsync({
           imports: [ConfigModule],
           inject: [ConfigService],

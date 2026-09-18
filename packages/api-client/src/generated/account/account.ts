@@ -25,11 +25,17 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  DisableTwoFactor200,
+  DisableTwoFactorBody,
   ListMyActivity200,
   ListMySessions200,
   Problem,
+  RequestEmailChange202,
+  RequestEmailChangeBody,
   RevokeMyOtherSessions200,
   RevokeMySession204,
+  StartStepUp200,
+  StartStepUpBody,
   UpdateMyProfile200,
   UpdateMyProfileBody
 } from '.././model';
@@ -415,3 +421,196 @@ export function useListMyActivity<TData = Awaited<ReturnType<typeof listMyActivi
 
 
 
+/**
+ * Verifies a code from your authenticator app and mints a short-lived, single-use grant bound to one purpose. A session cannot prove who is at the keyboard right now — it was established once, possibly days ago, possibly on a device that is no longer in your hands.
+ * @summary Confirm your identity before a sensitive action
+ */
+export const startStepUp = (
+    startStepUpBody: StartStepUpBody,
+ ) => {
+      
+      
+      return rayiFetch<StartStepUp200>(
+      {url: `/v1/me/step-up`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: startStepUpBody
+    },
+      );
+    }
+  
+
+
+export const getStartStepUpMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startStepUp>>, TError,{data: StartStepUpBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof startStepUp>>, TError,{data: StartStepUpBody}, TContext> => {
+
+const mutationKey = ['startStepUp'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startStepUp>>, {data: StartStepUpBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  startStepUp(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartStepUpMutationResult = NonNullable<Awaited<ReturnType<typeof startStepUp>>>
+    export type StartStepUpMutationBody = StartStepUpBody
+    export type StartStepUpMutationError = Problem
+
+    /**
+ * @summary Confirm your identity before a sensitive action
+ */
+export const useStartStepUp = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startStepUp>>, TError,{data: StartStepUpBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof startStepUp>>,
+        TError,
+        {data: StartStepUpBody},
+        TContext
+      > => {
+
+      const mutationOptions = getStartStepUpMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Needs a fresh authenticator code, and notifies the OLD address. The address that receives magic links IS the account, so changing it is the highest-value takeover step available — and the person who must hear about it is whoever holds the address today.
+ * @summary Start changing your email address
+ */
+export const requestEmailChange = (
+    requestEmailChangeBody: RequestEmailChangeBody,
+ ) => {
+      
+      
+      return rayiFetch<RequestEmailChange202>(
+      {url: `/v1/me/email`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: requestEmailChangeBody
+    },
+      );
+    }
+  
+
+
+export const getRequestEmailChangeMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestEmailChange>>, TError,{data: RequestEmailChangeBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof requestEmailChange>>, TError,{data: RequestEmailChangeBody}, TContext> => {
+
+const mutationKey = ['requestEmailChange'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestEmailChange>>, {data: RequestEmailChangeBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestEmailChange(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestEmailChangeMutationResult = NonNullable<Awaited<ReturnType<typeof requestEmailChange>>>
+    export type RequestEmailChangeMutationBody = RequestEmailChangeBody
+    export type RequestEmailChangeMutationError = Problem
+
+    /**
+ * @summary Start changing your email address
+ */
+export const useRequestEmailChange = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestEmailChange>>, TError,{data: RequestEmailChangeBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof requestEmailChange>>,
+        TError,
+        {data: RequestEmailChangeBody},
+        TContext
+      > => {
+
+      const mutationOptions = getRequestEmailChangeMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Needs a code from the factor being removed, so possession of the session alone is not enough. Better Auth exposes this with nothing but a session cookie, which is why its version is blocked at the mount.
+ * @summary Remove your authenticator app
+ */
+export const disableTwoFactor = (
+    disableTwoFactorBody: DisableTwoFactorBody,
+ ) => {
+      
+      
+      return rayiFetch<DisableTwoFactor200>(
+      {url: `/v1/me/two-factor/disable`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: disableTwoFactorBody
+    },
+      );
+    }
+  
+
+
+export const getDisableTwoFactorMutationOptions = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableTwoFactor>>, TError,{data: DisableTwoFactorBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof disableTwoFactor>>, TError,{data: DisableTwoFactorBody}, TContext> => {
+
+const mutationKey = ['disableTwoFactor'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disableTwoFactor>>, {data: DisableTwoFactorBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  disableTwoFactor(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisableTwoFactorMutationResult = NonNullable<Awaited<ReturnType<typeof disableTwoFactor>>>
+    export type DisableTwoFactorMutationBody = DisableTwoFactorBody
+    export type DisableTwoFactorMutationError = Problem
+
+    /**
+ * @summary Remove your authenticator app
+ */
+export const useDisableTwoFactor = <TError = Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableTwoFactor>>, TError,{data: DisableTwoFactorBody}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof disableTwoFactor>>,
+        TError,
+        {data: DisableTwoFactorBody},
+        TContext
+      > => {
+
+      const mutationOptions = getDisableTwoFactorMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    
