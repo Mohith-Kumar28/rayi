@@ -1,0 +1,112 @@
+# Decisions
+
+Every decision taken, with the reasoning. **Check here before proposing a change** — most of these
+were argued through and several reversed an earlier position for a specific reason.
+
+Status key: **Locked** — settled, build within it. **Open** — needs a call.
+
+---
+
+## Stack
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| NestJS on long-lived containers, **not serverless** | Locked | Ledger needs real transactions; RDS Proxy *pins* connections the moment you open one, so you lose multiplexing exactly on the money path. Long timers (7–14 day approval windows, 75-day horizon) fit a worker, not a 15-min Lambda ceiling. Cost is a wash (~$85–220/mo either way). Every payments company with public engineering disclosure — Stripe, Adyen, Wise, Monzo, Nubank, Gusto, Mercury, Modern Treasury — runs core ledger logic on persistent compute; none on FaaS |
+| **Prisma** as ORM | Locked (founder call) | Founder chose it over Drizzle knowingly. Work within it: raw SQL for `FOR UPDATE`, explicit isolation levels, and the constraints Prisma cannot express live in hand-written migrations |
+| **Better Auth** | Locked (founder call) | Chosen knowingly despite the advisory history. See `05-security.md` for the hardening that makes it safe |
+| **PostgreSQL on AWS RDS** | Locked | Not Neon or serverless-HTTP Postgres for the ledger — the ledger's whole point is long transactions with explicit isolation levels, which HTTP drivers don't do |
+| **Turborepo + pnpm** | Locked | `turbo prune --docker` solves the monorepo Docker build-context problem |
+| **TanStack Router** (SPA) for the money path | Locked | Backend is a separate API, so RSC/server functions add an authorization surface for nothing. TanStack **Start** is still RC — confine it to public pages if used at all |
+| **Fastify** (from the boilerplate) | Locked | Came with the boilerplate; verified `@nestjs/platform-fastify` 11.2.5 is above the CVE-2026-33011 fix line |
+| **NestJS 11.2.5**, not 12 | Locked | v12 shipped 2026-08-27 — three weeks old, ecosystem lagging. Above all four 2026 CVE floors. Revisit as a deliberate upgrade |
+| **Zod** for contracts, class-validator retained in inherited code | Locked | Zod drives the manifest and OpenAPI. The boilerplate's class-validator DTOs stay where they are; new money contracts use Zod |
+| **OpenAPI-first**, not tRPC | Locked | tRPC produces no OpenAPI artifact; its bridge was archived Nov 2024. An external partner or auditor needs a real spec |
+| **OpenFGA** | Deferred | Rayi's shape is org-scoped RBAC, not a Zanzibar sharing graph. A second datastore with eventual consistency gating money movement is the wrong trade. Build behind a `PermissionService` interface so it can be swapped later |
+
+### The boilerplate
+
+Replaced our hand-built backend with `superbug/nestjs-prisma-boilerplate` (shallow clone, no history;
+upstream `niraj-khatiwada/ultimate-nestjs-boilerplate`, 432★, MIT). Founder's call: *replace
+wholesale, then re-apply our work*.
+
+What it brought: Better Auth↔Nest wiring, worker server, BullMQ + Bull Board, Redis rate limiting,
+helmet, graceful shutdown, Pino, Prometheus/Grafana, i18n, S3 uploads, Docker dev/prod, i18n, CI.
+
+---
+
+## Tenancy and money model
+
+```
+Organization  (a company — owns the funding balance and the Stripe relationship)
+  └─ Workspace  (sub-brand / product line / market — groups campaigns and people, holds NO money)
+       └─ Campaign  (allocated a budget directly from the org balance)
+            └─ Deal  (one per creator: agreed total, agreed deliverable count)
+                 ├─ Milestone  (brand-authored: an amount + a release condition)
+                 └─ Deliverable  (one asset — video, reel, image, carousel)
+                      └─ Submission  (a versioned attempt; revisions create new versions)
+```
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| Campaigns allocate **directly from the org balance** — no workspace budget layer | Locked | Keeps the ledger tree two levels and halves the over-allocation invariants |
+| Workspace budget is an **authorization cap**, not a ledger account | Locked | Reconciles "each workspace has its own budget" with "workspaces hold no money" — a `BudgetEnvelope` ceiling drawn down at allocation time, enforced by `CHECK (committed <= ceiling)` |
+| Workspace ceiling **hard-blocks new allocations, leaves committed deals running** | Locked | Finance keeps control without stranding live creator work mid-campaign |
+| **Each client brand is its own organization**, funding from its own bank account | Locked | Founder call. Brand owns the money and can leave with its data |
+| Agency access = **a real `Member` row in the client's org**, via ordinary invitation | Locked | Three cross-org *delegation* designs were each demolished in review. Better Auth already supports one user in many orgs, so there is no delegation mechanism, no intersection logic, no second guard branch. `AgencyRelationship` is a **label** with no authorization weight |
+| Money authority **does not travel** to agency members | Locked | `MoneyAuthority` is a separate row the brand simply never mints for them |
+| **$10,000/day ceiling** for an org with no second approver | Locked | Applied on org risk signals, **not** self-declared headcount — otherwise the design punishes honesty: a founder who declares solo mode gets a ceiling while an attacker with two mailboxes gets none |
+| **Finance approves the envelope; marketing spends within it** | Locked | Makes the strategy doc's core insight real in software |
+
+---
+
+## Deals and milestones
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **Deal is a first-class entity**; milestones attach to Deal, never Campaign | Locked | Terms differ per creator; the payout bound needs a per-creator ceiling; the Stripe connected account and 1099 identity are per-creator; amendments need bilateral consent |
+| Milestone conditions are a **closed, parameterized catalogue** | Locked | v1: `ADVANCE`, `DELIVERABLES_APPROVED_COUNT`, `SPECIFIC_DELIVERABLES_APPROVED`, `ALL_DELIVERABLES_APPROVED`, `DATE_REACHED`, `MANUAL_BRAND_APPROVAL`. A DSL is premature; arbitrary user logic is unauditable — you could not tell a creator *why* they were not paid |
+| `MANUAL_BRAND_APPROVAL` is the escape hatch | Locked | Removes the pressure to build a rule engine |
+| Every condition must be **MONOTONIC** — once true, true forever | Locked | Payout is final. A milestone that becomes satisfied, releases, then becomes unsatisfied is an unrecoverable state the engine must be unable to reach |
+| Counting is **cumulative, never incremental** | Locked | "Total approved across the deal ≥ N". Incremental counting requires remembering which approvals were consumed, making evaluation order-dependent and non-idempotent |
+| **An advance is not a special type** — it's a milestone with a trivially satisfiable condition | Locked (founder call) | Founder's framing, and better than the special-casing originally proposed. What survives is the *disclosure*: the UI evaluates each condition against an empty deal, and anything satisfiable at t=0 surfaces the warning. Derived, so a brand cannot sidestep it by rephrasing |
+| **No cap on advance amount** | Locked (founder call) | Founder's call. ⚠️ The design pass argued for a hard 30% cap on *fraud* grounds — an advance is the shortest path from a stolen ACH debit to a cashed-out payout by a colluding fake creator. Mitigations that don't cap: no advance release until `charge.succeeded` **and** settled ≥2 business days; relationship gating (creator has ≥1 completed deal, or brand has prior history with this creator) |
+| Milestone amounts may be **fixed or a percentage** | Locked (founder call) | Percentage is *authoring input*, never authoritative. At acceptance each milestone resolves to integer minor units, odd cents go to the earliest milestone, and amounts **freeze on the row**. Re-evaluating at release would retroactively rewrite an already-paid milestone |
+| `SUM(milestone.amount) == deal.total`, enforced by a **database constraint** | Locked | The founder's "no amount mismatch" requirement made structural |
+| **Evaluation is pure; release is transactional** | Locked | `evaluateDeal()` is side-effect-free and returns per-milestone verdicts *with human sentences* — the same function powers the creator's "what unlocks my next payment", the brand's preview and the stored evidence, so the UI can never promise what the engine won't do |
+| Milestone conditions count **deliverables approved, never submissions** | Locked | If they counted submissions, a deliverable with two approved versions counts twice and "N videos approved" fires early — a silent overpay |
+
+---
+
+## Queues
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **BullMQ (Redis)** for everything that can afford at-least-once | Locked (founder call) | Emails, notifications, media processing, TikTok polling, reports. Keeps the boilerplate's whole queue investment |
+| **Postgres-backed queue for the money path only** | Locked (founder call) | The job must commit **inside the same transaction as the ledger write**. BullMQ lives in Redis and cannot join a Postgres transaction, so it would reintroduce the dual-write bug and require an outbox |
+
+---
+
+## Frontend
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **One origin for everything authenticated** | Locked | `app.rayi.com` with the API same-origin via a CloudFront `/api/*` behaviour → host-only `__Host-` cookie, no CORS, no preflight, no `SameSite=None`, and `connect-src 'self'` is literally true |
+| **Delete SSE from v1** | Locked | Two designs spent their largest complexity budget on a channel that only fires when the creator already has the page open — but the signature moment is her phone buzzing while inside TikTok. In-app liveness is TanStack Query `refetchInterval`; SMS/push are built first |
+| **Truthful pending state, not optimism** | Locked | On approve, rows move to a `Releasing in 0:58 · Undo (u)` lane. Felt speed identical to optimistic rendering, but the UI never asserts money moved — which matters because notifications may already have told the creator |
+| Client-supplied amounts are **assertions, never instructions** | Locked | Request carries `expectedAmountMinor`; the server compares against its own value, **pays its own value**, and skips-and-reports any mismatch |
+| **Bulk approve needs three server-side ceilings** | Locked | Per row, per batch total, per actor rolling 24h. The per-action limit was enforced *per row*, so a reviewer capped at $200 could select 1,000 cleared rows at $150 and move **$150,000 with one keystroke** |
+
+---
+
+## Open questions
+
+- **Does deliverable approval require `MoneyAuthority`?** Approving a deliverable deterministically
+  causes a Stripe Transfer 30 seconds later, so a "reviewer" role is functionally a money-moving
+  role. Either approval requires `MoneyAuthority` + the ceilings, or the action splits into
+  recommend-then-confirm (which preserves the finance/marketing split but adds a step to the
+  three-second review queue).
+- **Prisma 6 → 7 upgrade.** The boilerplate is on 6.19.3; our own guidance said pin 7.10.x. Prisma 6
+  *does* have `isolationLevel`, so it is functionally fine, but it is two majors behind. Deliberate
+  upgrade, not an incidental one.
+- **Should AWS config be required rather than optional?** Currently optional because the boilerplate
+  supports local *or* S3 uploads.
