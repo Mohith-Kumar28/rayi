@@ -51,6 +51,12 @@ Project skills in `.claude/skills/` load automatically when relevant:
 
 4. **No external call inside a database transaction.** No Stripe, no HTTP, no notification.
 
+   Email goes through **Resend**, from the worker only — `RESEND_API_KEY` on the api fails at boot,
+   same as the Stripe secret key. `emails.send()` **resolves** on failure (`{ data, error }`), so
+   never treat a resolved promise as a sent email. Every send carries a deterministic idempotency
+   key derived from the intent, because BullMQ is at-least-once and a magic link is a credential.
+   Nothing logs a template context.
+
 5. **Deny by default.** Authentication is a global guard; authorization is a second global guard that
    refuses any `@Operation()` route not declaring a permission. Tenant scope comes from the **URL**,
    never from `session.activeOrganizationId`. A non-member gets **404, not 403** — a 403 confirms the

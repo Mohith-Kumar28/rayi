@@ -9,7 +9,6 @@ services:
   #   depends_on:
   #     - database
   #     - redis
-  #     - mail
   #   command: >
   #     sh -c "pnpm start:dev"
 
@@ -42,15 +41,3 @@ services:
     networks:
       - nestjs-boilerplate-network
 
-  mail:
-    image: axllent/mailpit:v1.25
-    container_name: nestjs-boilerplate-mail
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    ports:
-      - ${DOCKER_MAIL_PORT}:1025
-      - ${DOCKER_MAIL_CLIENT_PORT}:8025
-    networks:
-      - nestjs-boilerplate-network

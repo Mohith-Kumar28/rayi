@@ -1,57 +1,36 @@
-// EmailVerification.tsx
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Html,
-  Preview,
-  Tailwind,
-  Text,
-} from '@react-email/components';
+import { Text } from '@react-email/components';
 import * as React from 'react';
+
+import { Action, Layout } from './layout';
 
 interface EmailVerificationProps {
   email: string;
   url: string;
 }
 
-export const EmailVerification = ({
-  email = '{{email}}',
-  url = '{{url}}',
-}: EmailVerificationProps) => {
+export function EmailVerification({ email, url }: EmailVerificationProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>Verify your Email</Preview>
-      <Tailwind>
-        <Body className="bg-[#f4f4f7] font-sans">
-          <Container className="bg-white max-w-xl mx-auto p-6 rounded-lg">
-            <Text className="text-xl font-semibold mb-4">Hi {email},</Text>
-            <Text className="text-base mb-2">
-              Thank you for registering. Please verify your email address by
-              clicking the button below:{' '}
-            </Text>
-            <Text className="text-base mb-4">
-              Click the button below to proceed to reset it:
-            </Text>
-            <Button
-              href={url}
-              className="bg-blue-600 text-white font-bold py-3 px-5 rounded-md no-underline inline-block mb-4"
-            >
-              Verify
-            </Button>
-            <Text className="text-xs text-gray-500 text-center mt-6">
-              If you did not request this, you can safely ignore this email.
-            </Text>
-            <Text className="text-xs text-gray-500 text-center mt-6">
-              This link will expire shortly for security reasons.
-            </Text>
-          </Container>
-        </Body>
-      </Tailwind>
-    </Html>
+    <Layout preview="Confirm your email address">
+      <Text className="text-[20px] leading-[28px] font-semibold tracking-tight text-[#191919] m-0 mb-3">
+        Confirm your email
+      </Text>
+      <Text className="text-[14px] leading-[22px] text-[#454545] m-0">
+        Confirm that <strong>{email}</strong> is yours. This is the address every sign-in link and
+        payment notification will be sent to, so it is worth getting right.
+      </Text>
+
+      <Action href={url} label="Confirm email" />
+
+      <Text className="text-[13px] leading-[20px] text-[#454545] mt-7 mb-0">
+        If you did not create a Rayi account, you can ignore this — the address will not be used.
+      </Text>
+    </Layout>
   );
-};
+}
+
+EmailVerification.PreviewProps = {
+  email: 'jordan@acme.com',
+  url: 'https://app.rayi.com/auth/verify?token=preview-token-not-real',
+} satisfies EmailVerificationProps;
 
 export default EmailVerification;

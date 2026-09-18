@@ -116,6 +116,20 @@ Organization  (a company — owns the funding balance and the Stripe relationshi
 
 ---
 
+## Email
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **Resend**, not SMTP | Locked (founder call) | An HTTPS API with an API key has no TLS negotiation to get subtly wrong, no long-lived connection to leak, and no `ignoreTLS` flag that silently downgrades a production sender to plaintext because it was convenient once in development. `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_REQUIRE_TLS` and `MAIL_IGNORE_TLS` are all gone |
+| **`RESEND_API_KEY` is worker-only**, like the Stripe secret key | Locked | The api is internet-reachable. A compromise there able to send from our verified domain is a phishing capability aimed at the population whose accounts receive money — and a magic link is a credential, so "send email as Rayi" is close to "sign in as anyone". The api enqueues; the worker sends. Boot fails if the key is anywhere else |
+| **React Email rendered at send time**, no handlebars | Locked | The old pipeline compiled `.tsx` → `.hbs` at build time and interpolated `{{email}}` at runtime: two representations of one template, a build step between them, and `strict: true` as the only thing between a renamed prop and an email reading `{{url}}` to a user. Template props are now required, so a missing one is a type error |
+| **Idempotency key derived from the intent** | Locked | BullMQ is at-least-once by design. A worker killed mid-send, a stalled job or a post-deploy redelivery all re-run the job — and for a magic link that is several live credentials in one mailbox. The key is `sha256(template, recipient, url)`, so retries collapse to one send while two genuinely different links still both go |
+| The key **hashes** the URL rather than containing it | Locked | An idempotency key travels in a request header and is echoed in Resend's dashboard and API responses. A magic link there is a credential in a third party's UI |
+| **Nothing logs a template context** | Locked | A magic link in a log line is a credential in a log line, readable by anyone with log access for as long as the log is retained. The send log carries the Resend id and nothing else |
+| `MAIL_REDIRECT_ALL_TO` for staging | Locked | Sending a live magic link to a real brand's mailbox from staging is not a mistake anyone gets to make twice. Every outbound email redirects, with the real recipient in `X-Rayi-Intended-Recipient` so the mailbox stays readable |
+
+---
+
 ## Open questions
 
 - **Does deliverable approval require `MoneyAuthority`?** Approving a deliverable deterministically

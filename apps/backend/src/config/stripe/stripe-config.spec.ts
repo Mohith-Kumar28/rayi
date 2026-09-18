@@ -57,3 +57,40 @@ describe('stripe config — role-scoped credentials', () => {
     });
   });
 });
+
+describe('IS_WORKER cannot be coerced into granting the key', () => {
+  /**
+   * THE regression. `validateConfig` transforms with `enableImplicitConversion`,
+   * and class-transformer coerces a boolean-typed property with `Boolean(value)`
+   * — so `'false'`, `'0'` and every other non-empty string became `true`.
+   *
+   * The constraint read that transformed value, so it answered "yes, this is the
+   * worker" for `IS_WORKER=false`, which is exactly what `.env.example` ships for
+   * the api process. A full Stripe secret key was therefore permitted on the
+   * internet-reachable process that the whole isolation argument says must never
+   * hold one.
+   */
+  it.each([
+    ['false', 'the value .env.example ships for the api'],
+    ['0', 'a falsy-looking value'],
+    ['yes', 'an affirmative-looking value that is not the contract'],
+    ['ture', 'a typo'],
+    ['', 'an empty string'],
+  ])('refuses a full secret key when IS_WORKER is %p (%s)', (value) => {
+    process.env.IS_WORKER = value;
+    process.env.STRIPE_SECRET_KEY = 'sk_live_deadbeef';
+    expect(() => stripeConfig()).toThrow();
+  });
+
+  it('refuses when IS_WORKER is absent', () => {
+    delete process.env.IS_WORKER;
+    process.env.STRIPE_SECRET_KEY = 'sk_live_deadbeef';
+    expect(() => stripeConfig()).toThrow();
+  });
+
+  it('still allows it on a real worker', () => {
+    process.env.IS_WORKER = 'true';
+    process.env.STRIPE_SECRET_KEY = 'sk_live_deadbeef';
+    expect(() => stripeConfig()).not.toThrow();
+  });
+});

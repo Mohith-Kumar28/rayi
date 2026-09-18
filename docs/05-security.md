@@ -64,6 +64,7 @@ Required configuration:
 | Pin ≥ **1.7.5** | Above all three advisory floors (≥1.4.17, ≥1.6.14, ≥1.6.22). Currently installed: 1.7.5 ✅ |
 | **Deny-by-default path allowlist at the mount** — ✅ BUILT | Better Auth's middleware serves and returns *before* the Nest guard chain runs, so its endpoints have no MFA, no audit, and no coverage from a route test that enumerates Nest routes. 10 of the 42 endpoints are open; the rest 404. `BLOCKED_AUTH_ROUTES` records why each is closed, and a test asserts every endpoint is in one list or the other |
 | **Committed surface snapshot** — ✅ BUILT | Better Auth mounts as a catch-all, so a new endpoint in a patch release becomes internet-reachable the moment the lockfile changes, with no code review of ours in the path. `pnpm verify:auth-surface` fails CI on the diff |
+| **`RESEND_API_KEY` is worker-only** — ✅ BUILT | Same reasoning as the Stripe secret key. An api compromise that could send from our verified domain is a phishing capability against the population that receives money, and a magic link is a credential |
 | **Ledger integrity assertion at boot** — ✅ BUILT | "Over-allocation is impossible because a CHECK prevents it" is true of the migrations, not of whatever database `DATABASE_URL` points at. The worker verifies all 21 controls against the live catalog and refuses to start if any is missing |
 | **Money capability cannot live in `member.role`** | Roles are stored **comma-separated**, and the docs confirm there is no restriction preventing an admin inviting someone as *owner*. `MONEY_ROLES.has(role)` is false for `'member,finance'`. Money capability is a Rayi-owned `MoneyAuthority` row, mintable only through a Rayi controller under step-up + dual control |
 | Workspaces are **Rayi tables, not Better Auth teams** | `teamMember` is `(id, teamId, userId, createdAt)` with **no role column**; issue #2955 requesting team-scoped roles was closed as not planned |
@@ -152,3 +153,46 @@ that is the mechanism by which a missing amount becomes a silent zero. Now on; 1
   Object Lock.
 - **Kill switch:** one row the worker reads *inside* the release transaction, flippable without a
   deploy, failing closed if unreadable, settable with `psql` if the API is down.
+
+## Two bugs found in controls that looked correct
+
+Both were in code that read as obviously right, and both failed in the direction
+that **grants** rather than denies.
+
+### `IS_WORKER=false` meant "yes, this is the worker"
+
+`validateConfig` runs `plainToClass` with `enableImplicitConversion: true`, and
+class-transformer coerces a property declared `IS_WORKER: boolean` with
+`Boolean(value)`:
+
+```
+'true'  -> true
+'false' -> true      <-- every non-empty string
+'0'     -> true
+''      -> false
+```
+
+`StripeSecretKeyOnlyOnWorker` read that transformed value, so it answered *yes,
+this is the worker* for `IS_WORKER=false` — which is exactly what
+`.env.example` ships for the api process. **A full `sk_` Stripe secret key was
+permitted on the internet-reachable process**, defeating the control the
+architecture calls load-bearing. The documented configuration was the vulnerable
+one.
+
+Fixed with `isWorkerProcess()`, which reads the raw environment and accepts only
+the literal string `true`. Everything else — a typo, `1`, `yes`, absent — fails
+**closed**, meaning the side that refuses the credential. Regression tests cover
+each value.
+
+### Two false-positive tamper alarms in the audit log
+
+See `docs/06-roadmap.md` step 6. Both would have fired on honest data, which is
+worse than not alarming at all: **people learn to ignore an alarm long before the
+day it matters.**
+
+1. `record` hashed its text arguments while `verify_chain` hashed the columns.
+   `ip_address` is `inet`, and `203.0.113.10` renders back as
+   `203.0.113.10/32` — so every event carrying an IP verified as tampered.
+2. A gap in `seq` was treated as a deleted row. `GENERATED ALWAYS AS IDENTITY` is
+   not gapless: a rolled-back transaction consumes a value permanently, because
+   sequences are deliberately non-transactional.

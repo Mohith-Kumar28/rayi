@@ -1,3 +1,4 @@
+import { isWorkerProcess } from '@/utils/config/is-worker-process';
 import validateConfig from '@/utils/config/validate-config';
 import { registerAs } from '@nestjs/config';
 import type {
@@ -42,12 +43,18 @@ const STRIPE_SECRET_KEY = /^sk_(live|test)_/;
 
 @ValidatorConstraint({ name: 'stripeSecretKeyOnlyOnWorker', async: false })
 class StripeSecretKeyOnlyOnWorker implements ValidatorConstraintInterface {
-  validate(value: unknown, args: ValidationArguments): boolean {
+  validate(value: unknown, _args: ValidationArguments): boolean {
     if (typeof value !== 'string' || !STRIPE_SECRET_KEY.test(value))
       return true;
-    const env = args.object as { IS_WORKER?: unknown };
-    // Only the worker may carry a full secret key.
-    return env.IS_WORKER === true || env.IS_WORKER === 'true';
+
+    // Read from the RAW environment, NOT from `args.object`.
+    //
+    // `validateConfig` transforms with `enableImplicitConversion`, and
+    // class-transformer coerces a boolean-typed property with `Boolean(value)` —
+    // so the string 'false' became `true` and this check passed for the api
+    // process. `.env.example` ships `IS_WORKER=false`, so the documented
+    // configuration defeated the control. See is-worker-process.ts.
+    return isWorkerProcess();
   }
 
   defaultMessage(): string {

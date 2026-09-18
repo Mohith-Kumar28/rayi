@@ -8,7 +8,7 @@ until step 16.
 Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
 Better Auth account endpoints that are currently blocked rather than replaced.
 
-Current test count: **358 passing**.
+Current test count: **378 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ Current test count: **358 passing**.
 | `@rayi/contracts` — manifest invariants, OpenAPI shape | 26 | no |
 | `@rayi/api-client` — generated client + error envelope | 10 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
-| `@rayi/backend` unit — config, guards, **auth allowlist**, **architecture boundaries** | 142 | no |
+| `@rayi/backend` unit — config, guards, auth allowlist, **mail**, architecture boundaries | 162 | no |
 | `@rayi/backend` integration — ledger, integrity, **audit**, authorization, treasury, **account**, HTTP, queue | **114** | **yes** |
 
 Two gates run outside the test suites, both of which fail CI on drift:
@@ -145,6 +145,33 @@ rayi_worker   SELECT ledger.account    →  4 rows
 rayi_worker   UPDATE ledger.entry      →  permission denied for table entry
 rayi_webhooks SELECT ledger.entry      →  permission denied for schema ledger
 ```
+
+## ✅ 2b. Email — Resend *(swapped in after step 7)*
+
+SMTP, nodemailer, handlebars and the `.tsx → .hbs` build step are gone. React Email
+components render at send time; `MailService` is the only caller of Resend.
+
+- [x] `RESEND_API_KEY` is **worker-only**, enforced at boot exactly like the Stripe secret key
+- [x] Deterministic idempotency keys — `sha256(template, recipient, url)` — so BullMQ's
+      at-least-once delivery cannot put several live magic links in one mailbox
+- [x] The URL is **hashed** into the key, never included: the key is echoed in Resend's dashboard
+- [x] Nothing logs a template context. A magic link in a log is a credential in a log
+- [x] `MAIL_REDIRECT_ALL_TO` for staging, with the real recipient in a header
+- [x] 36 tests across the service and config
+
+### Two traps this closed
+
+**Resend does not throw on failure.** `emails.send()` resolves to `{ data, error }`. A direct port
+from nodemailer — which throws — would `await`, see no exception, mark the BullMQ job complete and
+silently drop every email while every log line said success. Handled once, in `MailService`, and
+tested by stubbing an error response and asserting it throws.
+
+**`nest build` does not compile `.tsx`.** Its swc builder hardcodes `extensions ?? ['.ts']` and
+exposes no flag. The templates were absent from `dist` while typecheck, tests and the build all
+reported success — the first symptom would have been a worker crashing on its first outbound email,
+in production, on the sign-in path. A `build:templates` step fixes it and `verify:build` proves it,
+by rendering a template **out of `dist`** and asserting the props interpolated. Verified by removing
+the step and watching the check fail.
 
 ## ✅ 4. Ledger core
 
@@ -438,3 +465,6 @@ while Stripe has moved on.
 - [ ] Users cannot change their email or manage sessions: those Better Auth endpoints are blocked and
       their Nest replacements are not built yet
 - [ ] The seed script creates an admin with a password, which no longer signs anyone in
+- [ ] No Resend webhook handling yet: a hard bounce or a spam complaint is invisible, so a creator
+      whose address is dead looks identical to one who has not read their email
+- [ ] The console has no UI for the account routes (`/v1/me/*`) — the API exists, nothing calls it

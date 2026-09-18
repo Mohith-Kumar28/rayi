@@ -1,14 +1,23 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts",
+    "tsx"
+  ],
   "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".*\\.integration-spec\\.ts$",
-  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "transform": {
+    "^.+\\.(t|j)sx?$": "ts-jest"
+  },
   "moduleNameMapper": {
     "^@/(.*)$": "<rootDir>/src/$1",
     "^@rayi/contracts$": "<rootDir>/../../packages/contracts/src/index.ts",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
-  "setupFiles": ["<rootDir>/setup-jest.mjs"],
+  "setupFiles": [
+    "<rootDir>/setup-jest.mjs"
+  ],
   "testTimeout": 60000
 }
