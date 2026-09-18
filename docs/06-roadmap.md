@@ -8,16 +8,16 @@ until step 16.
 Steps 3 and 6 are one item short each: RLS with a `withTenant()` helper, and Nest replacements for the
 Better Auth account endpoints that are currently blocked rather than replaced.
 
-Current test count: **630 passing**.
+Current test count: **705 passing**.
 
 | Suite | Tests | Needs a database |
 | --- | --- | --- |
-| `@rayi/domain` — Money, pure ledger logic | 36 | no |
+| `@rayi/domain` — Money, **milestone conditions, deal evaluation** | 88 | no |
 | `@rayi/contracts` — manifest invariants, OpenAPI shape | 44 | no |
 | `@rayi/api-client` — generated client + error envelope | 10 | no |
 | `@rayi/console` — minor-unit conversion, idempotency key | 30 | no |
 | `@rayi/backend` unit — config, guards, auth allowlist, mail, **two webhook signature schemes**, TOTP (RFC 6238 vectors), architecture boundaries | 274 | no |
-| `@rayi/backend` integration — ledger, integrity, audit, authorization, treasury, account, step-up, members, RLS, **Resend + Stripe webhooks**, HTTP, queue | **236** | **yes** |
+| `@rayi/backend` integration — ledger, integrity, audit, authorization, treasury, account, step-up, members, RLS, webhooks, **review queue**, HTTP, queue | **259** | **yes** |
 
 Two gates run outside the test suites, both of which fail CI on drift:
 `pnpm verify:openapi` (the spec matches the manifest) and `pnpm verify:auth-surface`
@@ -631,7 +631,80 @@ Express onboarding, brand deposit via Checkout + Financial Connections + hosted 
 
 ## ⬜ 11. Deposit lifecycle + reconciliation from day one
 
-## ⬜ 12. Domain state machines
+## 🟡 12. Domain state machines
+
+Deal, agreement versions, milestones, deliverables, submissions and the review
+queue — **with no money movement anywhere in them**.
+
+- [x] `Deal` first-class and per-creator, with `AgreementVersion` (SCD-2) between it and its
+      milestones, so an accepted agreement is immutable and an amendment is a new version needing
+      both signatures
+- [x] **The condition catalogue** — closed, parameterized, JSONB with a generated `condition_type`
+      column under CHECK. An unknown type is refused by the storage engine, not by whichever code
+      path parses it first
+- [x] **`evaluateDeal()` — pure, total, clock-injected**, returning verdicts with human sentences
+- [x] Three machines kept apart: Deliverable (the slot), Submission (immutable versioned attempt),
+      Review (a decision on one version)
+- [x] Approve / request-changes / **undo**, with optimistic concurrency on every transition
+- [ ] Deliverable hard-deadline worker on a one-minute cron tick
+- [ ] The `scheduled_wake` table (a 75-day horizon outlives BullMQ's 14-day job retention)
+- [ ] Milestone release job — that is step 13, and the first money movement
+
+### Two properties that are registry-level requirements, not features
+
+**MONOTONIC — once true, true forever.** Payout is final, so a milestone that becomes satisfied,
+releases, and then becomes unsatisfied is an unrecoverable state: the money is gone and the ledger
+says it should not have been. It is also what makes concurrent re-evaluation trivially safe — if
+truth moves one way, a stale evaluation can only be *behind*, never wrong. Tested as a property over
+every condition type, against a world that only ever grows.
+
+**COUNTING IS CUMULATIVE.** `DELIVERABLES_APPROVED_COUNT` means "total approved across the deal >=
+N", so a tranche schedule is M1(5), M2(12), M3(20). Incremental counting would need to remember which
+approvals were consumed by which milestone, making evaluation order-dependent and non-idempotent —
+and under at-least-once delivery, that is a double payment. Tested for idempotence and order
+independence directly.
+
+### The four ways this would have released money wrongly
+
+Each is now a test:
+
+1. **Counting submissions instead of deliverables.** A deliverable with two approved versions counts
+   twice and "20 videos approved" fires at 19 — a silent overpay with every constraint passing.
+   Closed by a partial unique index: at most one live `APPROVED` review per deliverable.
+2. **Undo that deletes the review.** Impossible under append-only, and it erases the fact a decision
+   was made. Undo now **voids** — `voidedAt IS NULL` is in the index, so voiding frees the
+   deliverable and both rows survive.
+3. **A second release path.** The hard-deadline worker force-approved the deliverable without
+   inserting a Review, bypassing the one index that prevents double-pay. It goes through the
+   identical `approve()` with `actorKind = SYSTEM_AUTO`.
+4. **Approval gated only on a reviewer permission.** Approving deterministically releases funds, so
+   an approve button is a way to move money without holding money authority. The check asks *would
+   this approval satisfy a milestone* **before** writing, and requires `MoneyAuthority` plus the
+   per-transaction limit only when the answer is yes — so an ordinary review still needs no money
+   grant and the three-second queue is unaffected.
+
+### Undo is not a deleted job
+
+Deleting the queued release job is **not** an interlock: the worker can claim it between the click
+and the delete, which is a TOCTOU race with money on the other side. The job re-derives from the
+database at run time and aborts on any voided approval, so the void alone is sufficient and the job's
+existence is irrelevant.
+
+### An advance is not a special type
+
+It is a milestone whose condition is trivially satisfiable — no separate entity, no parallel code
+path, no second release mechanism to keep correct. What stays is the **disclosure**, and it is
+DERIVED: `isSatisfiableAtStart()` evaluates a condition against an empty deal, so
+`DELIVERABLES_APPROVED_COUNT` with `count: 0`, a `DATE_REACHED` in the past, and an empty
+`SPECIFIC_DELIVERABLES_APPROVED` list are all caught as advances. A brand cannot sidestep the warning
+by expressing one a different way.
+
+### Immutability, enforced by the database
+
+A released milestone's amount and condition cannot change (the ledger entry would become
+unexplainable). A submission cannot be edited (a revision is a new version, or a dispute cannot show
+attempt 1 and attempt 2 side by side). A review's decision cannot change (changing your mind is a new
+review after voiding the old one). All three are triggers, and all three have tests that try.
 
 Deal / milestone / deliverable / submission. `scheduled_wake` driven by a one-minute cron tick — not
 deferred queue jobs, whose 14-day retention would delete a 75-day horizon job before it fires.

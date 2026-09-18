@@ -54,6 +54,7 @@ model User {
     @@map("user")
 
     members       Member[]
+    deals         Deal[]
 }
 
 model Account {
@@ -413,6 +414,8 @@ model Campaign {
     /// database fact rather than a client-supplied parameter.
     workspace Workspace @relation(fields: [workspaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
+    deals Deal[]
+
     /// Referenced by ledger account parentage: an account tagged with this
     /// campaign is necessarily an account of this organization.
     @@unique([id, organizationId])
@@ -685,4 +688,263 @@ model TwoFactorBackupCode {
 
     @@index([userId, usedAt])
     @@map("two_factor_backup_code")
+}
+
+// ===========================================================================
+// THE CAMPAIGN DOMAIN
+// ===========================================================================
+//
+// Three machines that are routinely conflated, and must not be:
+//
+//   Deliverable — the SLOT the brand bought ("video 3 of 20")
+//   Submission  — an immutable VERSIONED ATTEMPT at filling it
+//   Review      — a DECISION on one submission version
+//
+// Every comment, check and review anchors to a submission VERSION, never to the
+// deliverable, because a dispute six months later must be able to show attempt 1,
+// exactly what was said about it, and attempt 2 side by side.
+// ===========================================================================
+
+/// The contract between ONE brand and ONE creator.
+///
+/// First-class, and milestones attach HERE rather than to a campaign, because six
+/// things are per-creator and cannot be expressed at campaign level: terms differ
+/// per creator in the same campaign; the payout bound `released <= totalAmount`
+/// needs a per-creator ceiling; the connected account, payable ledger account and
+/// 1099 identity are per-creator; acceptance and termination are independent of
+/// the campaign; the same creator appears in many campaigns; and an amendment
+/// needs both parties' consent, which is only meaningful bilaterally.
+model Deal {
+    id             String @id @default(uuid())
+    organizationId String
+    campaignId     String
+    creatorUserId  String
+
+    /// The agreed ceiling. `SUM(milestone.amountMinor)` must equal this, and
+    /// total released may never exceed it.
+    totalAmountMinor BigInt
+    currency         String @default("USD")
+
+    /// draft | offered | accepted | active | completed | cancelled | terminated
+    state String @default("draft")
+
+    /// Optimistic concurrency. Every transition carries the version it read, and
+    /// `UNIQUE(dealId, fromVersion)` on the transition log makes two concurrent
+    /// writers from the same version impossible.
+    version Int @default(0)
+
+    acceptedAt   DateTime?
+    completedAt  DateTime?
+    cancelledAt  DateTime?
+    createdAt    DateTime  @default(now())
+
+    campaign     Campaign            @relation(fields: [campaignId, organizationId], references: [id, organizationId], onDelete: Restrict)
+    creator      User                @relation(fields: [creatorUserId], references: [id], onDelete: Restrict)
+    agreements   AgreementVersion[]
+    deliverables Deliverable[]
+    transitions  DealTransition[]
+
+    /// Carries organizationId so a deliverable cannot belong to a deal in
+    /// another org — the same composite-FK parentage used everywhere else.
+    @@unique([id, organizationId])
+    /// One live deal per creator per campaign. Two would make "what did we agree"
+    /// unanswerable, and both would independently bound the payout.
+    @@unique([campaignId, creatorUserId])
+    @@index([organizationId, state])
+    @@index([creatorUserId, state])
+    @@map("deal")
+}
+
+/// An immutable version of the agreed terms (SCD-2).
+///
+/// An accepted agreement is never edited. An amendment is a NEW version needing
+/// both signatures, so "what did we agree, and when" is always answerable — and a
+/// brand cannot change the terms of work already delivered.
+model AgreementVersion {
+    id     String @id @default(uuid())
+    dealId String
+    /// 1, 2, 3… The live one is the highest with `acceptedAt` set.
+    version Int
+
+    totalAmountMinor BigInt
+
+    /// Both signatures. An amendment is not in force until both are present,
+    /// which is what makes it an agreement rather than an announcement.
+    brandAcceptedAt   DateTime?
+    brandAcceptedBy   String?
+    creatorAcceptedAt DateTime?
+
+    supersededAt DateTime?
+    createdAt    DateTime  @default(now())
+
+    deal       Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+    milestones Milestone[]
+
+    @@unique([dealId, version])
+    @@map("agreement_version")
+}
+
+/// An amount plus a condition. The payment schedule.
+///
+/// NOT the verification pipeline — that is the per-asset gate that applies to
+/// every deliverable. Milestones CONSUME its outputs; they do not replace it, and
+/// conflating the two is how "N videos approved" ends up meaning something nobody
+/// agreed to.
+model Milestone {
+    id                 String @id @default(uuid())
+    agreementVersionId String
+    dealId             String
+
+    sequence Int
+    title    String
+
+    /// FROZEN at acceptance. A percentage is authoring input, never the
+    /// authoritative value — re-evaluating it at release time means amending a
+    /// deal total silently rewrites the amount of an ALREADY-RELEASED milestone.
+    amountMinor BigInt
+
+    /// Kept for display and for authoring the next version only. Never read at
+    /// release time.
+    authoredBasisPoints Int?
+
+    /// The condition, as a closed parameterized union. JSONB with a generated
+    /// `condition_type` column under CHECK, so an unknown type is rejected by the
+    /// storage engine rather than by whichever code path happens to parse it.
+    condition Json
+
+    /// GENERATED ALWAYS from `condition->>'type'`. Written by Postgres, never by
+    /// application code. Declared here only so Prisma knows it exists.
+    conditionType String? @default(dbgenerated()) @map("condition_type")
+
+    /// Set by the release step. `@unique` on the release row is the real
+    /// at-most-once guarantee; this is the denormalised read.
+    releasedAt    DateTime?
+    ledgerEntryId String?
+
+    agreementVersion AgreementVersion @relation(fields: [agreementVersionId], references: [id], onDelete: Cascade)
+
+    @@unique([agreementVersionId, sequence])
+    @@index([dealId, releasedAt])
+    /// On the generated column, so "which milestones use condition X" is
+    /// answerable without scanning every JSONB blob.
+    @@index([conditionType], map: "milestone_condition_type_idx")
+    @@map("milestone")
+}
+
+/// One slot the brand bought. "Video 3 of 20."
+///
+/// Its STATE is what milestone conditions count — never submissions. A
+/// deliverable with two approved versions would otherwise count twice and fire a
+/// milestone early, which is a silent overpay.
+model Deliverable {
+    id     String @id @default(uuid())
+    dealId String
+
+    sequence Int
+    /// video | reel | image | carousel | story
+    kind     String @default("video")
+    brief    String?
+
+    /// pending | submitted | in_review | changes_requested | approved | cancelled
+    state   String @default("pending")
+    version Int    @default(0)
+
+    approvedAt DateTime?
+    createdAt  DateTime  @default(now())
+
+    deal        Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+    submissions Submission[]
+
+    @@unique([dealId, sequence])
+    @@index([dealId, state])
+    @@map("deliverable")
+}
+
+/// One immutable attempt at filling a deliverable.
+///
+/// A revision is a NEW version, never an edit. Every review, comment and check
+/// anchors here rather than to the deliverable, because a dispute must be able to
+/// show attempt 1, what was said about it, and attempt 2 side by side.
+model Submission {
+    id            String @id @default(uuid())
+    deliverableId String
+
+    /// 1, 2, 3… Monotonic per deliverable.
+    version Int
+
+    /// Where the ORIGINAL lives. Never served to anyone: originals are evidence,
+    /// and only derived renditions are served. See docs/01-product.md.
+    assetKey String?
+    caption  String?
+
+    submittedAt DateTime @default(now())
+
+    deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+    reviews     Review[]
+
+    @@unique([deliverableId, version])
+    @@map("submission")
+}
+
+/// A decision on one submission version.
+///
+/// **Inserted immediately with a nullable `voidedAt`, never deleted.** The
+/// ledger and audit tables are append-only under `REVOKE DELETE`, and undo has to
+/// work the same way: an undo that deleted the row would be impossible to perform
+/// and would erase the fact that a decision was made at all.
+model Review {
+    id           String @id @default(uuid())
+    submissionId String
+    /// Denormalised so the partial unique index below can be per-deliverable.
+    deliverableId String
+
+    /// APPROVED | CHANGES_REQUESTED | REJECTED
+    decision String
+
+    /// HUMAN | SYSTEM_AUTO. The hard-deadline worker goes through the IDENTICAL
+    /// approve path with SYSTEM_AUTO rather than force-approving the deliverable
+    /// — a second release path that skipped this row would bypass the one index
+    /// that prevents double-pay.
+    actorKind   String  @default("HUMAN")
+    actorUserId String?
+
+    comment String?
+    /// S3 key of a voice note. Brands review faster by talking than typing.
+    voiceKey String?
+
+    /// Set by undo. The partial unique index ignores voided rows, so undoing
+    /// frees the deliverable to be decided again.
+    voidedAt DateTime?
+    voidedBy String?
+
+    createdAt DateTime @default(now())
+
+    submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+    @@index([deliverableId, decision, voidedAt])
+    @@map("review")
+}
+
+/// The transition log. `UNIQUE(dealId, fromVersion)` is the concurrency control.
+///
+/// Two writers who both read version 4 cannot both write: the second violates the
+/// unique index. A naive `UNIQUE(dealId, toState)` would instead break legitimate
+/// resubmission after rejection, which is an ordinary and expected path.
+model DealTransition {
+    id     String @id @default(uuid())
+    dealId String
+
+    fromState   String
+    toState     String
+    fromVersion Int
+
+    actorUserId String?
+    reason      String?
+    createdAt   DateTime @default(now())
+
+    deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+    @@unique([dealId, fromVersion])
+    @@index([dealId, createdAt])
+    @@map("deal_transition")
 }

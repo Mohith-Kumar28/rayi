@@ -14,3 +14,21 @@ export {
   isCurrency,
   type Currency,
 } from './money/currency.js';
+
+export {
+  ConditionType,
+  evaluateCondition,
+  isSatisfiableAtStart,
+  type DealFacts,
+  type MilestoneCondition,
+  type Verdict,
+} from './deal/conditions.js';
+
+export {
+  evaluateDeal,
+  MilestoneAmountsError,
+  resolveMilestoneAmounts,
+  type DealEvaluation,
+  type MilestoneInput,
+  type MilestoneVerdict,
+} from './deal/evaluate.js';

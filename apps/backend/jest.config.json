@@ -41,7 +41,10 @@
     "^@/redis(.*)$": "<rootDir>/redis$1",
     "^@/shared(.*)$": "<rootDir>/shared$1",
     "^@/utils(.*)$": "<rootDir>/utils$1",
-    "^@/tools(.*)$": "<rootDir>/tools$1"
+    "^@/tools(.*)$": "<rootDir>/tools$1",
+    "^@rayi/domain$": "<rootDir>/../../../packages/domain/src/index.ts",
+    "^@rayi/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts",
+    "^(\\.{1,2}/.*)\\.js$": "$1"
   },
   "setupFiles": [
     "../setup-jest.mjs"

@@ -11,13 +11,16 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
-    "fast-check": "^3.23.2"
+    "fast-check": "^3.23.2",
+    "tslib": "^2.8.1"
   }
 }

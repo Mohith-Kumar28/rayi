@@ -39,6 +39,14 @@ export const AuditAction = {
   EmailSuppressed: 'email.suppressed',
   EmailSuppressionLifted: 'email.suppression_lifted',
 
+  // The review queue. Approving a deliverable can deterministically release
+  // funds, so these are money events even though no ledger entry is written here.
+  DeliverableApproved: 'deliverable.approved',
+  DeliverableApprovalUndone: 'deliverable.approval_undone',
+  DeliverableChangesRequested: 'deliverable.changes_requested',
+  DeliverableSubmitted: 'deliverable.submitted',
+  MilestoneSatisfied: 'milestone.satisfied',
+
   // Membership
   MemberInvited: 'member.invited',
   MemberRoleChanged: 'member.role_changed',

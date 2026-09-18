@@ -83,22 +83,31 @@ Project skills in `.claude/skills/` load automatically when relevant:
    `ledger.account_for_campaign` decides which account that is and reads the owning org from the
    campaign row. Never pass an account id in from outside the ledger.
 
-7. **A test that guards money may not swallow a rejection.** `.catch(() => null)` in a concurrency
+7. **Milestone conditions count DELIVERABLES in state APPROVED, never submissions approved**, and
+   counting is CUMULATIVE. Every condition must be MONOTONIC — once true, true forever — because
+   payout is final and a milestone that un-satisfies after releasing is unrecoverable. These are
+   requirements for any condition added later, not properties of the current six.
+
+8. **Approving a deliverable IS a money action** when it satisfies a milestone. Ask *would this
+   approval satisfy one* before writing, and require `MoneyAuthority` plus the limit only when the
+   answer is yes.
+
+9. **A test that guards money may not swallow a rejection.** `.catch(() => null)` in a concurrency
    test is how a real double-write defect stayed hidden through a green suite.
 
-8. **A control that has never been seen to fail is a control nobody knows still works.** Every
+10. **A control that has never been seen to fail is a control nobody knows still works.** Every
    boundary rule, every ledger constraint and every allowlist entry has a test that deliberately
    breaks it and asserts the alarm fires. Adding a control without that test is adding decoration.
 
-9. **Every state-changing action writes an audit row.** `AuditService.record()` never throws — an
+11. **Every state-changing action writes an audit row.** `AuditService.record()` never throws — an
    audit failure must not roll back the action it was recording. Use `recordInTransaction()` only
    where an unrecorded change is worse than no change (money capability, role changes).
 
-10. **A `self` route's handler must scope every query by the session's user id in the WHERE clause.**
+12. **A `self` route's handler must scope every query by the session's user id in the WHERE clause.**
     The guard only checks that you are signed in; it cannot know whether a row is yours. There is no
     `userId` parameter on any account route, and there must never be one.
 
-11. **Better Auth serves before Nest's guards run.** Its mount is deny-by-default
+13. **Better Auth serves before Nest's guards run.** Its mount is deny-by-default
    (`src/auth/auth-route-allowlist.ts`): 10 endpoints open, the other 32 return 404, and
    `pnpm verify:auth-surface` fails CI if an upgrade changes the set. Never widen it without
    deciding, in `BLOCKED_AUTH_ROUTES`, why the endpoint was closed.

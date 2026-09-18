@@ -146,6 +146,25 @@ Organization  (a company — owns the funding balance and the Stripe relationshi
 
 ---
 
+## The campaign domain, settled while building step 12
+
+| Decision | Status | Why |
+| --- | --- | --- |
+| **Milestones attach to DEAL, never Campaign** | Locked | Six things are per-creator: terms differ within one campaign; `released <= totalAmount` needs a per-creator ceiling; the connected account, payable account and 1099 identity are per-creator; acceptance and termination are independent of the campaign; the same creator appears in many campaigns; and an amendment needs both parties' consent, which is only meaningful bilaterally |
+| **Conditions are a CLOSED catalogue**, not a rule engine | Locked | The thing a condition decides is when money leaves. `MANUAL_BRAND_APPROVAL` is the escape hatch that removes the pressure to build a DSL |
+| **Every condition MUST be monotonic** | Locked | Payout is final. A milestone that un-satisfies after releasing is unrecoverable — and monotonicity is also what makes concurrent re-evaluation trivially safe |
+| **Counting is CUMULATIVE** | Locked | Incremental counting requires remembering which approvals were consumed by which milestone, making evaluation order-dependent and non-idempotent. Under at-least-once delivery, that is a double payment |
+| **Conditions count DELIVERABLES, never submissions** | Locked | A deliverable with two approved versions counts twice and "20 videos approved" fires at 19. Enforced by a partial unique index, not by convention |
+| **An advance is a milestone, not a type** | Locked (founder call) | No separate entity, no parallel code path. The disclosure is DERIVED, so `count: 0` and a past `DATE_REACHED` are caught as advances too |
+| **Percentages resolve ONCE and freeze** | Locked | Re-evaluating at release time means amending a deal total silently rewrites the amount of an already-released milestone |
+| **Evaluation is pure; release is transactional** | Locked | A bug in the pure function produces a wrong LIST, not a wrong transfer |
+| **Undo VOIDS, never deletes** | Locked | Deleting is impossible under append-only and erases the fact a decision was made. `voidedAt IS NULL` is in the index, so voiding frees the deliverable |
+| **Deleting a queued job is NOT an interlock** | Locked | The worker can claim it between the click and the delete. The job re-derives at run time and aborts on a voided approval |
+| **The auto-approve worker uses the SAME approve path** | Locked | Force-approving without a Review row bypassed the one index that prevents double-pay |
+| **Approval requires `MoneyAuthority` when it satisfies a milestone** | Locked | Approving deterministically releases funds, so an approve button gated only on a reviewer permission is a way to move money without holding money authority. Asked BEFORE the write, so an ordinary review still needs no grant |
+
+---
+
 ## Open questions
 
 - **Does deliverable approval require `MoneyAuthority`?** Approving a deliverable deterministically
