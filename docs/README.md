@@ -38,7 +38,7 @@ Each of these cost real investigation. They are written up in full in the docs a
 
 - **An ACH return arrives as `charge.dispute.created`, not `charge.failed`.** Guards written against
   the obvious event never fire.
-- **Stripe does not support partial ACH refunds.** Refund-to-origin is load-bearing in the
+- **Stripe does not support partial ACH refunds** *(contradicted in test mode on 2026-09-18 — see `04-money-rules.md`; awaiting written confirmation)*. Refund-to-origin is load-bearing in the
   non-transmitter argument. The per-deposit lot model is the mitigation.
 - **`source_transaction` must not be used with ACH** — Stripe would cover a returned debit out of
   Rayi's own balance.

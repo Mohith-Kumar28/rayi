@@ -1,4 +1,5 @@
 import { AuthGuard } from '@/auth/auth.guard';
+import { isWorkerProcess } from '@/utils/config/is-worker-process';
 import appConfig from '@/config/app/app.config';
 import authConfig from '@/config/auth/auth.config';
 import databaseConfig from '@/config/database/database.config';
@@ -68,7 +69,14 @@ export class AppModule {
             grafanaConfig,
             stripeConfig,
           ],
-          envFilePath: ['.env'],
+          /*
+           * The worker reads `.env.worker` FIRST, then `.env`. Nothing else ever
+           * reads `.env.worker`, which is where the full Stripe secret key
+           * lives — so an internet-facing process cannot load it even by
+           * accident. The first file wins for a duplicate key, and a variable
+           * already in the real environment beats both.
+           */
+          envFilePath: isWorkerProcess() ? ['.env.worker', '.env'] : ['.env'],
         }),
         GracefulShutdownModule.forRoot({
           cleanup: (...args) => {

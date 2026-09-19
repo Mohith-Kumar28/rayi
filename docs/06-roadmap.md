@@ -856,6 +856,27 @@ while Stripe has moved on.
 
 ---
 
+## Stripe: wired, not connected
+
+The SDK is in (`stripe` pinned exact at 22.6.2 — `latest` is a real release here, unlike the Prisma
+trap). Two things run against a real account the moment a test key exists:
+
+- `pnpm --filter @rayi/backend verify:stripe` — a preflight that answers what a dashboard visit
+  would, reproducibly: key kind vs process, test vs live, `us_bank_account_ach_payments` and
+  `transfers` capabilities, **whether the payout schedule is manual** (it must be — automatic
+  payouts sweep the balance that milestone transfers draw on, and Stripe documents the
+  interference), and which of the six required events anything is actually listening for. It reads
+  only the environment and prints no secret.
+- `pnpm --filter @rayi/backend test:contract` — the partial-ACH-refund contract test §04 asks for.
+
+**No key has been obtained or handled.** A `sk_` read into an agent's context lands in a transcript,
+and this architecture's first rule is that the api process holds no full Stripe key at all. The key
+goes from Stripe to `.env` directly. `.env` and `.env.*` are already gitignored.
+
+Remaining to connect: install the Stripe CLI (`brew install stripe/stripe-cli/stripe`), restart
+Claude Code so the installed `stripe@claude-plugins-official` plugin loads its skills, paste a
+`sk_test_`, then run the two commands above.
+
 ## Not blocked by engineering — start these now
 
 - [ ] **A2P 10DLC registration.** 10–15 days, up to **4–6 weeks** with AT&T manual review, and it

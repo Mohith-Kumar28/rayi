@@ -190,9 +190,24 @@ form. An attacker funds $250k from a personal account, picks "Company", and Stri
 Require Financial Connections instant verification and derive the window from Stripe-observed
 ownership data. **Default every lot to 61 calendar days**, shorten only on independent verification.
 
-### ✅ Stripe does NOT support partial ACH refunds
+### ⚠️ Stripe does NOT support partial ACH refunds — contradicted in test mode, 2026-09-18
 
 Capability matrix: **`Refunds: ✗ Partial refunds · ✓ Full refunds · Submission window: 180 days`**.
+
+> **Observed 2026-09-18, test mode, account `acct_1TFauQ7PizBunITV`:** the contract test created a
+> $500.00 `us_bank_account` charge (test account `000123456789`, verified with descriptor `SM11AA`)
+> and requested a **$200.00 partial refund. Stripe accepted it and it reached `succeeded`**
+> (`pyr_1UH8y77PizBunITVCujOMWfy`; charge `amount_refunded` 20000 of 50000, not fully refunded).
+>
+> This does **not** yet overturn the decision below. Test mode can be more permissive than live, and
+> the capability matrix describes live ACH. But it now contradicts BOTH the matrix and this document,
+> which makes item 3 below — written confirmation from Stripe — the blocking question. The contract
+> test is left asserting `false` and is therefore RED, deliberately: it must be changed in the same
+> commit as this section, by whoever decides, not absorbed silently.
+>
+> If partial ACH refunds are real in live mode, the lot model stops being required for refunds to
+> work at all — but it is still required for attributing an ACH return to the exact deposit
+> returned and for giving each deposit its own 2-year hold clock and return window.
 
 Refund-to-origin is the load-bearing fact in the non-transmitter argument *and* in the withdrawal
 policy promise that "unallocated funds are refundable anytime, self-serve, one click".
@@ -205,9 +220,13 @@ Consequences:
    these N whole lots".
 2. **It constrains deposit UX** — nudge toward several smaller lots, trading against per-debit ACH cost.
 3. **Confirm with Stripe in writing.** A Stripe support article contradicts the capability matrix, and
-   two Stripe sources disagreeing is itself the risk. Ship a contract test calling
-   `refunds.create({payment_intent, amount})` against a `us_bank_account` charge in test mode on every
-   deploy.
+   two Stripe sources disagreeing is itself the risk.
+   - [x] **The contract test exists**: `apps/backend/test/stripe-capabilities.contract-spec.ts`,
+         run with `pnpm --filter @rayi/backend test:contract`. It creates a `us_bank_account`
+         charge in test mode, attempts a partial refund, prints what it found, and **asserts the
+         answer is still "not allowed"** — so a capability change is a failing build rather than a
+         brand asking for their money back. It refuses to run against a live key.
+   - [ ] Still get it in writing from Stripe. A test that passes today is not a commitment.
 
 ### ✅ Other verified facts
 
